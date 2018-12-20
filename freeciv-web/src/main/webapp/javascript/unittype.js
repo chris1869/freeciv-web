@@ -19,8 +19,44 @@
 
 
 var unit_types = {};  /* packet_ruleset_unit */
+var unit_classes = {};  /* packet_ruleset_unit_class */
 
 var U_NOT_OBSOLETED = null;
+
+var UCF_TERRAIN_SPEED = 0;
+var UCF_TERRAIN_DEFENSE = 1;
+var UCF_DAMAGE_SLOWS = 2;
+var UCF_CAN_OCCUPY_CITY = 3;
+var UCF_MISSILE = 4;
+var UCF_BUILD_ANYWHERE = 5;
+var UCF_UNREACHABLE = 6;
+var UCF_COLLECT_RANSOM = 7;
+var UCF_ZOC = 8;
+var UCF_CAN_FORTIFY = 9;
+var UCF_CAN_PILLAGE = 10;
+var UCF_DOESNT_OCCUPY_TILE = 11;
+var UCF_ATTACK_NON_NATIVE = 12;
+var UCF_KILLCITIZEN = 13;
+
+/**********************************************************************//**
+  Return true iff units of the given type can do the specified generalized
+  (ruleset defined) action enabler controlled action.
+
+  Note that a specific unit in a specific situation still may be unable to
+  perform the specified action.
+**************************************************************************/
+function utype_can_do_action(putype, action_id)
+{
+  if (putype == null || putype['utype_actions'] == null) {
+    console.log("utype_can_do_action(): bad unit type.");
+    return false;
+  } else if (action_id >= ACTION_COUNT || action_id < 0) {
+    console.log("utype_can_do_action(): invalid action id " + action_id);
+    return false;
+  }
+
+  return putype['utype_actions'].isSet(action_id);
+}
 
 /**************************************************************************
 Whether player can build given unit somewhere,

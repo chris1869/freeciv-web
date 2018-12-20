@@ -91,13 +91,8 @@ function new_hotseat_game()
 **************************************************************************/
 function setup_hotseat_game() 
 {
-  if (ws.readyState === 1) {
-    send_message("/set phasemode player");
-    send_message("/set minp 2");
-    send_message("/set ec_chat=enabled");
-    send_message("/set ec_info=enabled");
-    send_message("/set ec_max_size=20000");
-    send_message("/set ec_turns=32768");
+  if (ws != null && ws.readyState === 1) {
+    set_alternate_turns();
     send_message("/set autotoggle disabled");
     hotseat_players.push($("#username_req_1").val());
     for (var i = 2; i <= num_hotseat_players; i++) {
@@ -116,29 +111,7 @@ function setup_hotseat_game()
  ...
 **************************************************************************/
 function validate_hotseat_username(field) {
-  var check_username = $(field).val();
-
-  var cleaned_username = check_username.replace(/[^a-zA-Z]/g,'');
-
-  if (check_username == null || check_username.length == 0) {
-    $("#username_validation_result").html("The name can't be empty.");
-    $("#username_validation_result").show();
-    return false;
-  } else if (check_username.length <= 2 ) {
-    $("#username_validation_result").html("The name is too short.");
-    $("#username_validation_result").show();
-    return false;
-  } else if (check_username.length >= 32) {
-    $("#username_validation_result").html("The name is too long.");
-    $("#username_validation_result").show();
-    return false;
-  } else if (check_username != cleaned_username) {
-    $("#username_validation_result").html("The name contains invalid characters, only the English alphabet is allowed.");
-    $("#username_validation_result").show();
-    return false;
-  }
-
-  return true;
+  return is_username_valid_show($(field).val());
 }
 
 

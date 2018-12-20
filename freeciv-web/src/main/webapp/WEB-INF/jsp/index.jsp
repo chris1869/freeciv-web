@@ -20,18 +20,6 @@
 	}
 	.statistics { text-align: center; }
 
-   /* Make lastest blog articles look less like a list.	*/
-	ul.blog-post-summary { list-style-type: none; }
-	ul.blog-post-summary > li {	margin-bottom: 5px;	}
-	ul.blog-post-summary > li > a {
-		color: #494A49;
-		display: block;
-	}
-	ul.blog-post-summary > li > a:nth-of-type(1n) {	text-decoration: underline; }
-	ul.blog-post-summary > li > a:nth-of-type(2n) {
-		font-size: x-small;
-		text-decoration: none;
-	}
 	/* Game launcher */          
 	#game-launcher {
 		width: 100%;
@@ -120,28 +108,11 @@
 	.jumbotron {
 	padding-bottom: 0px;
 	}
-	.nav {
-	  font-size: 16px;
-	}
 </style>
 </head>
 <body>
 	<div class="container">
 		<%@include file="/WEB-INF/jsp/fragments/header.jsp"%>
-
-		<div class="row">
-			<div class="col-md-12">
-				<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
-				<ins class="adsbygoogle"
-					style="display:block"
-					data-ad-client="ca-pub-5520523052926214"
-					data-ad-slot="7043279885"
-					data-ad-format="auto"></ins>
-				<script>
-				(adsbygoogle = window.adsbygoogle || []).push({});
-				</script>
-			</div>
-		</div>
 
 		<div class="jumbotron">
 			<div class="row">
@@ -153,34 +124,10 @@
 				<div class="row top-buffer-3">
 					<p class="lead">
 						<fmt:message key="index-lead"/>
-
-                         <%--<div class="row top-buffer-3">
-                         <h1>Join Freeciv-web: One Turn per Day game XII</h1>
-                         <b>Game XII XI has started and you can join it now!</b><br>
-                         <b>Each player will play one turn every day. <br><br>
-                         This will be one of the greatest ever multiplayer game of Freeciv with 300 players on 30000 map tiles!<br>
-                         </b>
-                         <h2><a href="/webclient?action=multi&civserverport=6006&civserverhost=play&multi=true">Join the LongTurn Web XII here!</a></h2>
-			            </div>--%>
-
 					</p>
 				</div>
 			</div>
 		</div> <!-- end jumbotron -->
-
-		<div class="row">
-			<div class="col-md-12">
-				<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
-				<ins class="adsbygoogle"
-					style="display:block"
-					data-ad-client="ca-pub-5520523052926214"
-					data-ad-slot="7043279885"
-					data-ad-format="auto"></ins>
-				<script>
-				(adsbygoogle = window.adsbygoogle || []).push({});
-				</script>
-			</div>
-		</div>
 
 		<div id="game-launcher" class="row">
 
@@ -195,14 +142,14 @@
 								Play against the Freeciv AI with 2D HTML5 graphics
 							</div>
 						</c:if>
-						<a id="single-button" href="/webclient/?action=new" class="btn"><i class="fa fa-flag"></i> <fmt:message key="index-game-launcher-2d"/></a>
+						<a id="single-button" href="/webclient/?action=new&type=singleplayer" class="btn"><i class="fa fa-flag"></i> <fmt:message key="index-game-launcher-2d"/></a>
 
 						<c:if test="${default_lang}">
 							<div class="features">
 								Play against the Freeciv AI with 3D WebGL<br>graphics using the Three.js 3D engine
 							</div>
 						</c:if>
-						<a href="/webclient/?action=new&renderer=webgl" class="btn" id="webgl_button"><i class="fa fa-cube"></i> <fmt:message key="index-game-launcher-3d"/></a>
+						<a href="/webclient/?action=new&renderer=webgl&type=singleplayer" class="btn" id="webgl_button"><i class="fa fa-cube"></i> <fmt:message key="index-game-launcher-3d"/></a>
 
 
 						<c:if test="${default_lang}">
@@ -210,7 +157,7 @@
 								Start on a scenario map, such as <br> World map, America, Italy or Japan.
 							</div>
 						</c:if>
-						<a href="/webclient/?action=load&amp;scenario=true" class="btn"><i class="fa fa-map-o"></i> <fmt:message key="index-game-launcher-scenario"/></a>
+						<a href="/webclient/?action=load&amp;scenario=true&type=singleplayer" class="btn"><i class="fa fa-map-o"></i> <fmt:message key="index-game-launcher-scenario"/></a>
 						<c:if test="${default_lang}">
 							<div class="features">
 								Choose your map from a real earth map.
@@ -235,23 +182,19 @@
 								Start a play-by-email game where you get an e-mail <br> when it is your turn to play.
 							</div>
 						</c:if>
-						<a href="/webclient/?action=pbem" class="btn"><i class="fa fa-envelope"></i> <fmt:message key="index-game-launcher-play-by-email"/></a>
+						<a href="/webclient/?action=pbem&type=pbem" class="btn"><i class="fa fa-envelope"></i> <fmt:message key="index-game-launcher-play-by-email"/></a>
 						<c:if test="${default_lang}">
 							<div class="features">
 								Play multiple human players <br> on the same computer
 							</div>
 						</c:if>
-						<a href="/webclient/?action=hotseat" class="btn"><i class="fa fa-user-plus"></i> <fmt:message key="index-game-launcher-hotseat" /></a>
+						<a href="/webclient/?action=hotseat&type=singleplayer" class="btn"><i class="fa fa-user-plus"></i> <fmt:message key="index-game-launcher-hotseat" /></a>
 
 						<c:if test="${default_lang}">
 							<div class="features">
 								Play a <b>Freeciv-web One Turn per Day</b>, where up to 300 human <br>players play one turn every day:
 							</div>
 						</c:if>
-						<a href="/webclient?action=multi&civserverport=6003&civserverhost=play&multi=true" class="btn" style="font-size: 15px; padding: 4px;">Game 8 - One Turn per Day</a>
-						<a href="/webclient?action=multi&civserverport=6004&civserverhost=play&multi=true" class="btn" style="font-size: 15px; padding: 4px;">Game X - One Turn per Day</a>
-						<a href="/webclient?action=multi&civserverport=6005&civserverhost=play&multi=true" class="btn" style="font-size: 15px; padding: 4px;">Game XI - One Turn per Day</a>
-						<a href="/webclient?action=multi&civserverport=6006&civserverhost=play&multi=true" class="btn" style="font-size: 15px; padding: 4px;">Game XII - One Turn per Day</a>
 
 					</div>
 				</div>
@@ -288,21 +231,6 @@
 			</a>
 		</div>  <!-- end apps/browser plugins -->
 
-
-
-		<div class="row top-buffer-1">
-			<div class="col-md-12 ">
-				<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
-				<ins class="adsbygoogle"
-					style="display:block"
-					data-ad-client="ca-pub-5520523052926214"
-					data-ad-slot="7043279885"
-					data-ad-format="auto"></ins>
-				<script>
-				(adsbygoogle = window.adsbygoogle || []).push({});
-				</script>
-			</div>
-		</div>
 
 		<div class="row">
 			<div class="col-md-6">
@@ -349,12 +277,12 @@
 										<td>
 											<c:choose>
 												<c:when test="${game.state == 'Running' or game.state == 'Pregame'}">
-													<a  class="label label-success" href="/webclient/?action=multi&civserverport=${game.port}&amp;civserverhost=${game.host}&amp;multi=true">
+													<a  class="label label-success" href="/webclient/?action=multi&civserverport=${game.port}&amp;civserverhost=${game.host}&amp;multi=true&amp;type=${game.type}">
 														Play
 													</a>
 												</c:when>
 												<c:otherwise>
-													<a class="label label-success" href="/webclient/?action=observe&amp;civserverport=${game.port}&amp;civserverhost=${game.host}&amp;multi=true">
+													<a class="label label-success" href="/webclient/?action=observe&amp;civserverport=${game.port}&amp;civserverhost=${game.host}&amp;multi=true&amp;type=${game.type}">
 														Observe
 													</a>
 												</c:otherwise>
@@ -399,22 +327,6 @@
 		</div> <!-- end multiplayer/best play by email -->
 
 
-               <div class="row top-buffer-1">
-                        <div class="col-md-12">
-                                <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
-                                <ins class="adsbygoogle"
-                                        style="display:block"
-                                        data-ad-client="ca-pub-5520523052926214"
-                                        data-ad-slot="7043279885"
-                                        data-ad-format="auto"></ins>
-                                <script>
-                                (adsbygoogle = window.adsbygoogle || []).push({});
-                                </script>
-                        </div>
-                </div>
-
-
-
                 <div class="row">
                         <div class="col-md-12">
                                 <h2><fmt:message key="index-youtube"/></h2>
@@ -434,30 +346,6 @@
 
 
 </div> <!-- end youtube -->
-
-
-		<div class="row" id="latest-from-blog">
-			<div class="col-md-12 container">
-				<h2><fmt:message key="index-latest-blog"/></h2>
-				<div class="panel-freeciv">
-					<ul id="latest-from-blog-articles" class="blog-post-summary">
-						<!--
-							loaded dynamically
-						-->
-					</ul>
-				</div>
-			</div>
-		</div> <!-- end blog -->
-
-			 <div  class="row" style="padding-top: 30px;">
-                                <div class="col-md-2">
-                                </div>
-                                <div class="col-md-8">
-                                    <iframe src="https://discordapp.com/widget?id=354200788785954818&theme=light" width="100%" height="400" allowtransparency="true" frameborder="0"></iframe>
-                                </div>
-                                <div class="col-md-2">
-                                </div>
-</div>
 
 
 		<div class="row">

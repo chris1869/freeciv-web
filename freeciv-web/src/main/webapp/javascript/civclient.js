@@ -31,8 +31,8 @@ var username = null;
 
 var fc_seedrandom = null;
 
-// List of ports which are reserved for LongTurn games.
-var longturn_server_port_list = [6003,6004,6005,6006];
+// singleplayer, multiplayer, longturn, pbem
+var game_type = "";
 
 var music_list = [ "battle-epic",
                    "andrewbeck-ancient",
@@ -72,7 +72,30 @@ function civclient_init()
   $.blockUI.defaults['css']['color'] = "#fff";
   $.blockUI.defaults['theme'] = true;
 
-  if ($.getUrlVar('action') == "observe") {
+  var action = $.getUrlVar('action');
+  game_type = $.getUrlVar('type');
+  if (game_type == null) {
+    if (action == null || action == 'multi') {
+      swal({
+             title: "Unknown game type",
+             text: "For some reason the client can't determine what kind of game this is. Please <a href='https://github.com/freeciv/freeciv-web/issues'>open an issue</a> detailing how you got here",
+             html: true,
+             type: "error"
+           },
+           // Requires a parameter to also be called on cancel
+           function (unused) {
+             window.location.href ='/';
+           }
+      );
+      return;
+    } else if (action == 'pbem') {
+      game_type = 'pbem';
+    } else {
+      game_type = 'singleplayer';
+    }
+  }
+
+  if (action == "observe") {
     observing = true;
     $("#civ_tab").remove();
     $("#cities_tab").remove();
@@ -101,8 +124,8 @@ function civclient_init()
   if (renderer == RENDERER_WEBGL) init_webgl_renderer();
 
   game_init();
+  $('#tabs').tabs({ heightStyle: "fill" });
   control_init();
-  init_city_dialog();
   init_replay();
 
   timeoutTimerId = setInterval(update_timeout, 1000);
@@ -137,7 +160,6 @@ function civclient_init()
   }
 
 
-  $('#tabs').tabs({ heightStyle: "fill" });
   $('#tabs').css("height", $(window).height());
   $("#tabs-map").height("auto");
   $("#tabs-civ").height("auto");
@@ -227,6 +249,37 @@ function init_common_intro_dialog() {
       show_intro_dialog("Welcome to Freeciv-web", msg);
     }
 
+  } else if ($.getUrlVar('action') == "hack") {
+    var hack_port;
+    var hack_username;
+
+    if ($.getUrlVar('civserverport') != null) {
+      hack_port = $.getUrlVar('civserverport');
+    } else {
+      show_intro_dialog("Welcome to Freeciv-web",
+        "Hack mode disabled because civserverport wasn't specified. "
+        + "Falling back to regular mode.");
+      return;
+    }
+
+    if ($.getUrlVar("username") != null) {
+      hack_username = $.getUrlVar("username");
+    } else if (simpleStorage.hasKey("username")) {
+      hack_username = simpleStorage.get("username");
+    } else {
+      show_intro_dialog("Welcome to Freeciv-web",
+        "Hack mode disabled because \"username\" wasn't specified and no "
+        + "stored user name was found. " +
+        "Falling back to regular mode.");
+      return;
+    }
+
+    if ($.getUrlVar('autostart') == "true") {
+      autostart = true;
+    }
+
+    network_init_manual_hack(hack_port, hack_username,
+                             $.getUrlVar("savegame"));
   } else {
     show_intro_dialog("Welcome to Freeciv-web",
       "You are about to join this game server, where you can " +
@@ -300,27 +353,7 @@ function show_dialog_message(title, message) {
 function validate_username() {
   username = $("#username_req").val();
 
-  var cleaned_username = username.replace(/[^a-zA-Z]/g,'');
-
-  if (username == null || username.length == 0 || username == "pbem") {
-    $("#username_validation_result").html("Your name can't be empty.");
-    $("#username_validation_result").show();
-    return false;
-  } else if (username.length <= 2 ) {
-    $("#username_validation_result").html("Your name is too short.");
-    $("#username_validation_result").show();
-    return false;
-  } else if (username.length >= 32) {
-    $("#username_validation_result").html("Your name is too long.");
-    $("#username_validation_result").show();
-    return false;
-  } else if (username != cleaned_username) {
-    $("#username_validation_result").html("Your name contains invalid characters, only the English alphabet is allowed.");
-    $("#username_validation_result").show();
-    return false;
-  } else if (!check_text_with_banlist_exact(username)) {
-    $("#username_validation_result").html("Your account has been banned.");
-    $("#username_validation_result").show();
+  if (!is_username_valid_show(username)) {
     return false;
   }
 
@@ -329,6 +362,21 @@ function validate_username() {
   return true;
 }
 
+/**************************************************************************
+ Checks if the username is valid and shows the reason if it is not.
+ Returns whether the username is valid.
+**************************************************************************/
+function is_username_valid_show(username) {
+  var reason = get_invalid_username_reason(username);
+  if (reason != null) {
+    $("#username_validation_result").html("The username '"
+                + username.replace(/&/g, "&amp;").replace(/</g, "&lt;")
+                + "' is " + reason + ".");
+    $("#username_validation_result").show();
+    return false;
+  }
+  return true;
+}
 
 
 
@@ -611,10 +659,5 @@ function switch_renderer()
 **************************************************************************/
 function is_longturn()
 {
-  for (var i = 0; i < longturn_server_port_list.length; i++) {
-    if (longturn_server_port_list[i] == civserverport || $.getUrlVar('civserverport') == longturn_server_port_list[i]) {
-      return true;
-    }
-  }
-  return false;
+  return game_type == "longturn";
 }

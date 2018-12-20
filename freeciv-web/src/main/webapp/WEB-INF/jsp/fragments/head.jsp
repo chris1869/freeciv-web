@@ -1,9 +1,23 @@
-<title>Freeciv-web - open source turn-based strategy game</title>
+<%@ page import="static org.apache.commons.lang3.StringUtils.stripToNull" %>
+<%@ page import="java.util.Properties" %>
+<%@ page import="java.io.IOException" %>
+<%
+    String gaTrackingId = null;
+    String trackJsToken = null;
+    try {
+        Properties prop = new Properties();
+        prop.load(getServletContext().getResourceAsStream("/WEB-INF/config.properties"));
+        gaTrackingId = stripToNull(prop.getProperty("ga-tracking-id"));
+        trackJsToken = stripToNull(prop.getProperty("trackjs-token"));
+    } catch (IOException e) {
+        e.printStackTrace();
+    }
+%>
+<title>${empty title ? "Freeciv-web - open source turn-based strategy game" : title}</title>
 <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
 <meta name="author" content="The Freeciv project">
 <meta name="description" content="Play Freeciv online with 2d HTML5 or 3D WebGL in the browser. Freeciv is a Free and Open Source empire-building strategy game made with 2D HTML5 or 3D WebGL mode, which you can play in your browser, tablet or mobile device!">
-<meta name="google-site-verification" content="Dz5U0ImteDS6QJqksSs6Nq7opQXZaHLntcSUkshCF8I" />
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta property="og:image" content="/static/images/frontpage-jumbotron-alt.png" />
 
@@ -18,17 +32,21 @@
 
 <link rel="manifest" href="/static/manifest.json">
 
+<% if (gaTrackingId != null) { %>
 <script>
 	(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
 	(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
 	m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
 	})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
 
-	ga('create', 'UA-40584174-1', 'auto');
+	ga('create', '<%= gaTrackingId %>', 'auto');
 	ga('send', 'pageview');  
-</script> 
-<script src="https://d2zah9y47r7bi2.cloudfront.net/releases/current/tracker.js" data-token="ee5dba6fe2e048f79b422157b450947b"></script>
-
+</script>
+<% } %>
+<% if (trackJsToken != null) { %>
+<script type="text/javascript">window._trackJs = { token: '<%= trackJsToken %>' };</script>
+<script type="text/javascript" src="https://cdn.trackjs.com/releases/current/tracker.js"></script>
+<% } %>
 <style>
 	/*
 		 _____                   _                        _     
@@ -104,5 +122,8 @@
 	.ongoing-games-number {
 		margin-left: 5px;
 		background:#BE602D;
+	}
+	.nav {
+		font-size: 16px;
 	}
 </style>

@@ -70,10 +70,12 @@ function show_intelligence_report_embassy(pplayer)
   $("#intel_dialog").remove();
   $("<div id='intel_dialog'></div>").appendTo("div#game_page");
 
+  const capital = player_capital(pplayer);
+
   var intel_data = {
     ruler: pplayer['name'],
     government: governments[pplayer['government']]['name'],
-    capital: '(not implemeted yet)', // TODO
+    capital: capital ? capital.name : '(capital unknown)',
     gold: pplayer['gold'],
     tax: pplayer['tax'] + '%',
     science: pplayer['science'] + '%',
@@ -124,18 +126,7 @@ function show_intelligence_report_embassy(pplayer)
     });
   }
 
-  $.ajax({
-    url: "/webclient/intel.hbs?ts=" + ts,
-    dataType: "html",
-    cache: true,
-    async: false
-  }).fail(function() {
-    console.error("Unable to intelligence report dialog template.");
-  }).done(function( data ) {
-    var template=Handlebars.compile(data);
-    $("#intel_dialog").html(template(intel_data));
-  });
-
+  $("#intel_dialog").html(Handlebars.templates['intel'](intel_data));
   $("#intel_dialog").dialog({
 			bgiframe: true,
 			modal: true,

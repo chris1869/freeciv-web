@@ -1,3 +1,5 @@
+<!-- LOCATION:freeciv-web/src/main/webapp/META-INF/context.xml
+-->
 <Context>
   <!-- Does Freeciv-web fail with a complaint about how your time zone is
     "unrecognized or represents more than one time zone"? Change the "url"
@@ -9,7 +11,7 @@
     (inside quatation marks) and rebuild. -->
   <Resource name="jdbc/freeciv_mysql" auth="Container" type="javax.sql.DataSource"
                maxTotal="100" maxIdle="30" maxWaitMillis="10000"
-               username="root" password="vagrant" driverClassName="com.mysql.cj.jdbc.Driver"
-               url="jdbc:mysql://localhost:3306/freeciv_web"/>
+               username="#DB_USER#" password="#DB_PASSWORD#" driverClassName="com.mysql.jdbc.Driver"
+               url="jdbc:mysql://localhost:3306/#DB_NAME#?useSSL=false"/>
 
 </Context>

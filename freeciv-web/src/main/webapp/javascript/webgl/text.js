@@ -124,8 +124,9 @@ function create_city_label(pcity)
   // Production
   var prod_type = get_city_production_type(pcity);
   if (prod_type != null) {
-    var tag = prod_type.graphic_str;
-    if (tileset[tag] != null) {
+    var tag = tileset_ruleset_entity_tag_str_or_alt(prod_type,
+                                                    "unit or building");
+    if (tag != null) {
       ctx.fillStyle = background_color;
       ctx.fillRect(width, 0, 36, 32);
       ctx.drawImage(sprites[tag], width, 0, 31, 18*2);
@@ -210,8 +211,9 @@ function update_city_label(pcity)
   // Production
   var prod_type = get_city_production_type(pcity);
   if (prod_type != null) {
-    var tag = prod_type.graphic_str;
-    if (tileset[tag] != null) {
+    var tag = tileset_ruleset_entity_tag_str_or_alt(prod_type,
+                                                    "unit or building");
+    if (tag != null) {
       ctx.fillStyle = background_color;
       ctx.fillRect(width, 0, 36, 32);
       ctx.drawImage(sprites[tag], width, 0, 31, 18*2);
@@ -221,7 +223,6 @@ function update_city_label(pcity)
 
   var texture = texture_cache['city_' + pcity['id']];
   texture.needsUpdate = true;
-
 }
 
 /****************************************************************************
@@ -296,7 +297,6 @@ function create_map_tile_label(ptile)
 function get_unit_activity_text(punit)
 {
   var activity = punit['activity'];
-  var act_tgt  = punit['activity_tgt'];
 
   /* don't draw activity for enemy units */
   if (client.conn.playing == null || punit['owner'] != client.conn.playing.playerno) {

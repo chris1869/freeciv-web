@@ -14,9 +14,10 @@ The Blender 3D models can be found here: https://github.com/freeciv/freeciv-web/
 Building and testing
 --------------------
 Build Freeciv-web as normal with Vagrant as described in the main README file.
+You can then test it in your instance.
 
-The WebGL renderer can also be tested live in production here:
-https://play.freeciv.org/
+You may use the WebGL interface live at:
+- [moving borders](https://fcw.movingborders.es)
 
 Debugging
 ---------

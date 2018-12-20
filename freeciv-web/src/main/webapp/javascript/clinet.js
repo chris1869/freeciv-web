@@ -24,13 +24,32 @@ var syncTimerId = -1;
 var clinet_last_send = 0;
 var debug_client_speed_list = [];
 
-var freeciv_version = "+Freeciv.Web.Devel-3.0";
+var freeciv_version = "+Freeciv.Web.Devel-3.1";
 
 var ws = null;
 var civserverport = null;
 
 var ping_last = new Date().getTime();
 var pingtime_check = 240000;
+var ping_timer = null;
+
+/**************************************************************************
+  Initialize the network communication with the server manually.
+**************************************************************************/
+function network_init_manual_hack(civserverport_manual, username_manual,
+                                  savegame)
+{
+  civserverport = civserverport_manual;
+  username = username_manual;
+
+  websocket_init();
+
+  if (savegame != null) {
+    wait_for_text("You are logged in as", function () {
+      load_game_real(savegame);
+    });
+  }
+}
 
 /****************************************************************************
   Initialized the Network communication, by requesting a valid server port.
@@ -67,9 +86,6 @@ function network_init()
 		+ textStatus + " " + errorThrown + " " + request.getResponseHeader('result'));
    }
   });
-
-  setInterval(ping_check, pingtime_check);
-
 }
 
 /****************************************************************************
@@ -104,6 +120,12 @@ function websocket_init()
    $("#turn_done_button").button( "option", "disabled", true);
    $("#save_button").button( "option", "disabled", true);
    pbem_phase_ended = true;
+
+   /* The player can't save the game after the connection is down. */
+   $(window).unbind('beforeunload');
+
+   /* Don't ping a dead connection. */
+   clearInterval(ping_timer);
   };
 
   ws.onerror = function (evt) {
@@ -139,11 +161,19 @@ function check_websocket_ready()
     "major_version" : 2, "minor_version" : 5, "patch_version" : 99,
     "port": civserverport, "password" : sha_password, "subject" : google_user_subject};
     ws.send(JSON.stringify(login_message));
+
+    /* Leaving the page without saving can now be an issue. */
+    $(window).bind('beforeunload', function(){
+      return "Do you really want to leave your nation behind now?";
+    });
+
+    /* The connection is now up. Verify that it remains alive. */
+    ping_timer = setInterval(ping_check, pingtime_check);
+
     $.unblockUI();
   } else {
     setTimeout(check_websocket_ready, 500);
   }
-
 }
 
 /****************************************************************************

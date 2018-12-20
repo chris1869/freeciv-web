@@ -31,7 +31,7 @@ function show_pbem_dialog()
   var message = "";
 
   if ($.getUrlVar('invited_by') != null) {
-    var invited = $.getUrlVar('invited_by').replace(/[^a-zA-Z]/g,'');
+    var invited = $.getUrlVar('invited_by').replace(/[^a-zA-Z0-9]/g,'');
     message = "You have been invited by " + invited + " for a Play-by-Email game of Freeciv-web. "
     + "You and " + invited + " will play alternating turns, and you will get an e-mail every time "
     + "it is your turn to play. First you can create a new user or log-in, then you will play "
@@ -349,7 +349,7 @@ function create_new_pbem_game()
           opponents.push(data);
           network_init();
           $("#dialog").dialog('close');
-          setTimeout("create_pbem_players();", 3500);
+          setTimeout(create_pbem_players, 3500);
           show_dialog_message("Game ready", "Play-By-Email game is now ready to start. " +
           "Click the start game button to play the first turn. You can also configure some " +
           "game settings before the game begins. The default settings are recommended. " +
@@ -407,7 +407,7 @@ function create_new_pbem_game()
     if (game_start_ready && pbem_ready_players == playercount) {
       network_init();
       $("#dialog").dialog('close');
-      setTimeout("create_pbem_players();", 3500);
+      setTimeout(create_pbem_players, 3500);
       show_dialog_message("Game ready", "Play-By-Email game is now ready to start. " +
           "Click the start game button to play the first turn. You can also configure some " +
           "game settings before the game begins. The default settings are recommended. " +
@@ -447,14 +447,18 @@ function send_pbem_invitation(email)
 **************************************************************************/
 function create_pbem_players()
 {
-  if (opponents != null && opponents.length > 0) {
-    for (var i = 0; i < opponents.length; i++) {
-      send_message("/create " + opponents[i]);
-    }
-    setTimeout("pbem_init_game();", 1200);
+  if (ws != null && ws.readyState === 1) {
+    if (opponents != null && opponents.length > 0) {
+      for (var i = 0; i < opponents.length; i++) {
+        send_message("/create " + opponents[i]);
+      }
+      setTimeout(pbem_init_game, 1200);
 
+    } else {
+      swal("Error: invalid opponent selected.");
+    }
   } else {
-    swal("Error: invalid opponent selected.");
+    setTimeout(create_pbem_players, 500);
   }
 }
 
@@ -498,7 +502,7 @@ function pbem_end_phase()
     simpleStorage.set("pbem_" + $.getUrlVar('savegame'), "true");
   }
   $(window).unbind('beforeunload');
-  setTimeout("window.location.href ='/';", 5000);
+  setTimeout(() => window.location.href ='/', 5000);
 }
 
 /**************************************************************************

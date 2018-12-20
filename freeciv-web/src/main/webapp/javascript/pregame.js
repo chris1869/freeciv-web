@@ -27,7 +27,6 @@ var metamessage_changed = false;
 var logged_in_with_password = false;
 var antialiasing_setting = true;
 var update_player_info_pregame_queued = false;
-var captcha_site_key = '6LfpcgMTAAAAAPRAOqYy6ZUhuX6bOJ7-7-_1V0FL';
 var password_reset_count = 0;
 var google_user_subject = null;
 
@@ -38,12 +37,29 @@ function pregame_start_game()
 {
   if (client.conn['player_num'] == null) return;
 
+  if (is_pbem() || is_hotseat()) {
+    set_alternate_turns();
+  }
+
   var test_packet = {"pid" : packet_player_ready, "is_ready" : true,
                      "player_no": client.conn['player_num']};
   var myJSONText = JSON.stringify(test_packet);
   send_request(myJSONText);
 
   setup_window_size ();
+}
+
+/****************************************************************************
+  Set some parameters needed for alternate turns game type.
+****************************************************************************/
+function set_alternate_turns()
+{
+  send_message("/set phasemode player");
+  send_message("/set minp 2");
+  send_message("/set ec_chat=enabled");
+  send_message("/set ec_info=enabled");
+  send_message("/set ec_max_size=20000");
+  send_message("/set ec_turns=32768");
 }
 
 /****************************************************************************
@@ -515,7 +531,7 @@ function pregame_settings()
       "     <li><a href='#pregame_settings_tabs-3'>Other</a></li>" +
       "   </ul>"
       + "<div id='pregame_settings_tabs-1'><table id='settings_table'> "
-      + "<tr class='not_pbem' title='Ruleset version'><td>Ruleset:</td>"
+      + "<tr title='Ruleset version'><td>Ruleset:</td>"
       + "<td><select name='ruleset' id='ruleset'>"
       + "<option value='classic'>Classic</option>"
       + "<option value='civ2civ3'>Civ2Civ3</option>"
@@ -1184,8 +1200,6 @@ function show_longturn_intro_dialog() {
   $("#dialog").remove();
   $("<div id='dialog'></div>").appendTo("div#game_page");
 
-  var intro_html = message
-
   $("#dialog").html(message);
   var stored_username = simpleStorage.get("username", "");
   if (stored_username != null && stored_username != false) {
@@ -1242,7 +1256,6 @@ function show_longturn_intro_dialog() {
 function validate_username_callback()
 {
   var check_username = $("#username_req").val();
-  var result = false;
   $.ajax({
    type: 'POST',
    url: "/validate_user?userstring=" + check_username,
@@ -1257,6 +1270,8 @@ function validate_username_callback()
           network_init();
           if (!is_touch_device()) $("#pregame_text_input").focus();
           $("#dialog").dialog('close');
+          $("#password_req").val("");
+          simpleStorage.set("password", "");
         }
       } else {
         username = $("#username_req").val().trim();
@@ -1309,6 +1324,8 @@ function validate_username_callback()
       }
     },
    error: function (request, textStatus, errorThrown) {
+     console.log("For programmers and server admins: "
+                 + "Please check if the meta server is running properly.");
      swal("Error. Please try again with a different name.");
    }
   });
@@ -1330,7 +1347,7 @@ function show_new_user_account_dialog(gametype)
                 + "<tr><td>Confim password:</td><td><input id='confirm_password' type='password' size='25'></td></tr></table><br>"
                 + "<div id='username_validation_result' style='display:none;'></div><br>"
                 + "Remember your username and password, since you will need this to log in later.<br><br>"
-                + "Click to accept captcha to show that you are real human player:<br>"
+                + (captcha_site_key != '' ? "Click to accept captcha to show that you are real human player:<br>" : "")
                 + "<div id='captcha_element'></div><br><br>"
                 + "<div><small><ul><li>It is free and safe to create a new account on Freeciv-web.</li>"
                 + "<li>A user account allows you to save and load games.</li>"
@@ -1371,13 +1388,15 @@ function show_new_user_account_dialog(gametype)
 
   $("#dialog").dialog('open');
 
-  if (grecaptcha !== undefined && grecaptcha != null) {
-    $('#captcha_element').html('');
-    grecaptcha.render('captcha_element', {
-          'sitekey' : captcha_site_key
-        });
-  } else {
-    swal("Captcha not available. This could be caused by a browser plugin.");
+  if (captcha_site_key != '') {
+    if (grecaptcha !== undefined && grecaptcha != null) {
+      $('#captcha_element').html('');
+      grecaptcha.render('captcha_element', {
+            'sitekey' : captcha_site_key
+          });
+    } else {
+      swal("Captcha not available. This could be caused by a browser plugin.");
+    }
   }
 
   $("#username").blur(function() {
@@ -1425,31 +1444,20 @@ function create_new_freeciv_user_account_request(action_type)
   var email = $("#email").val().trim();
   var captcha = $("#g-recaptcha-response").val();
 
-  var cleaned_username = username.replace(/[^a-zA-Z]/g,'');
-
   $("#username_validation_result").show();
+  if (!is_username_valid_show(username)) {
+    return false;
+  }
   if (!validateEmail(email)) {
     $("#username_validation_result").html("Invalid email address.");
-    return false;
-  } else if (username == null || username.length == 0 || username == "pbem") {
-    $("#username_validation_result").html("Your name can't be empty.");
-    return false;
-  } else if (username.length <= 2 ) {
-    $("#username_validation_result").html("Your name is too short.");
     return false;
   } else if (password == null || password.length <= 2 ) {
     $("#username_validation_result").html("Your password is too short.");
     return false;
-  } else if (username.length >= 32) {
-    $("#username_validation_result").html("Your name is too long.");
-    return false;
-  } else if (username != cleaned_username) {
-    $("#username_validation_result").html("Your name contains invalid characters, only the English alphabet is allowed.");
-    return false;
   } else if (password != confirm_password) {
     $("#username_validation_result").html("The passwords do not match.");
     return false;
-  } else if (captcha == null || captcha === undefined ) {
+  } else if (captcha_site_key != '' && captcha == null) {
     $("#username_validation_result").html("Please fill in the captcha. You might have to disable some plugins to see the captcha.");
     return false;
   }
@@ -1640,8 +1648,12 @@ function forgot_pbem_password()
                     }
 				    var reset_email = $("#email_reset").val();
 				    var captcha = $("#g-recaptcha-response").val();
-				    if (reset_email == null || reset_email.length == 0 || captcha == null || captcha.length == 0) {
-				      swal("Please fill in e-mail and complete the captcha.");
+				    if (reset_email == null || reset_email.length == 0) {
+				      swal("Please fill in e-mail.");
+				      return;
+				    }
+				    if (captcha_site_key != '' && (captcha == null || captcha.length == 0)) {
+				      swal("Please fill complete the captcha.");
 				      return;
 				    }
                     $.ajax({
@@ -1661,13 +1673,15 @@ function forgot_pbem_password()
 
   $("#pwd_dialog").dialog('open');
 
-  if (grecaptcha !== undefined && grecaptcha != null) {
-    $('#captcha_element').html('');
-    grecaptcha.render('captcha_element', {
-          'sitekey' : captcha_site_key
-        });
-  } else {
-    swal("Captcha not available. This could be caused by a browser plugin.");
+  if (captcha_site_key != '') {
+    if (grecaptcha !== undefined && grecaptcha != null) {
+      $('#captcha_element').html('');
+      grecaptcha.render('captcha_element', {
+            'sitekey' : captcha_site_key
+          });
+    } else {
+      swal("Captcha not available. This could be caused by a browser plugin.");
+    }
   }
 
 }

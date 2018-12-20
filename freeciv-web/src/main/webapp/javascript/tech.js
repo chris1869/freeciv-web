@@ -64,9 +64,9 @@ typedef int Tech_type_id;
  */
 var A_NONE = 0;
 var A_FIRST = 1;
-var A_LAST = MAX_NUM_ITEMS;
-var A_UNSET = (A_LAST + 1);
-var A_FUTURE  = (A_LAST + 2);
+var A_LAST = (MAX_NUM_ADVANCES + 1);
+var A_FUTURE  = (A_LAST + 1);
+var A_UNSET = (A_LAST + 2);
 var A_UNKNOWN = (A_LAST + 3);
 var A_LAST_REAL = A_UNKNOWN;
 
@@ -143,7 +143,6 @@ function init_tech_screen()
   var max_width = 0;
   var max_height = 0;
   for (var tech_id in techs) {
-    var ptech = techs[tech_id];
     if (!(tech_id+'' in reqtree) || reqtree[tech_id+''] == null) {
       continue;
     }
@@ -219,7 +218,7 @@ function update_tech_tree()
     /* KNOWN TECHNOLOGY */
     if (player_invention_state(client.conn.playing, ptech['id']) == TECH_KNOWN) {
 
-      var tag = ptech['graphic_str'];
+      var tag = tileset_tech_graphic_tag(ptech);
       tech_canvas_ctx.fillStyle = 'rgb(255, 255, 255)';
       tech_canvas_ctx.fillRect(x-2, y-2, tech_item_width, tech_item_height);
       tech_canvas_ctx.strokeStyle = 'rgb(225, 225, 225)';
@@ -241,7 +240,7 @@ function update_tech_tree()
         tech_canvas_ctx.lineWidth=6;
       }
 
-      var tag = ptech['graphic_str'];
+      var tag = tileset_tech_graphic_tag(ptech);
       tech_canvas_ctx.lineWidth=4;
       tech_canvas_ctx.fillStyle = bgcolor;
       tech_canvas_ctx.fillRect(x-2, y-2, tech_item_width, tech_item_height);
@@ -266,7 +265,7 @@ function update_tech_tree()
         tech_canvas_ctx.lineWidth=6;
       }
 
-      var tag = ptech['graphic_str'];
+      var tag = tileset_tech_graphic_tag(ptech);
       tech_canvas_ctx.fillStyle =  bgcolor;
       tech_canvas_ctx.fillRect(x-2, y-2, tech_item_width, tech_item_height);
       tech_canvas_ctx.strokeStyle = 'rgb(255, 255, 255)';
@@ -288,7 +287,7 @@ function update_tech_tree()
     var prunits = get_units_from_tech(tech_id);
     for (var i = 0; i < prunits.length; i++) {
       var punit = prunits[i];
-      var sprite = sprites[punit['graphic_str']];
+      var sprite = sprites[tileset_unit_type_graphic_tag(punit)];
       if (sprite != null) {
         tech_canvas_ctx.drawImage(sprite, x + 50 + ((tech_things++) * 30), y + 23, 28, 24);
       }
@@ -297,16 +296,12 @@ function update_tech_tree()
     var primprovements = get_improvements_from_tech(tech_id);
     for (var i = 0; i < primprovements.length; i++) {
       var pimpr = primprovements[i];
-      var sprite = sprites[pimpr['graphic_str']];
+      var sprite = sprites[tileset_building_graphic_tag(pimpr)];
       if (sprite != null) {
         tech_canvas_ctx.drawImage(sprite, x + 50 + ((tech_things++) * 30), y + 23, 28, 24);
       }
     }
-
-
-
   }
-
 }
 
 /**************************************************************************
@@ -383,10 +378,12 @@ function update_tech_screen()
   $("#tech_goal_box").html(research_goal_text);
 
   $("#tech_progress_text").html("Research progress: "
-		         + client.conn.playing['bulbs_researched']
-			 + " / " + client.conn.playing['current_research_cost']);
+                                + client.conn.playing['bulbs_researched']
+                                + " / "
+                                + client.conn.playing['researching_cost']);
 
-  var pct_progress = 100 * (client.conn.playing['bulbs_researched'] / client.conn.playing['current_research_cost']);
+  var pct_progress = 100 * (client.conn.playing['bulbs_researched']
+                            / client.conn.playing['researching_cost']);
 
   $("#progress_fg").css("width", pct_progress  + "%");
 
@@ -412,45 +409,35 @@ function update_tech_screen()
 }
 
 /**************************************************************************
- Returns for example "Bronze working allows building phalax".
+ Returns for example "Bronze working allows building phalanx."
 **************************************************************************/
 function get_advances_text(tech_id)
 {
-  var ptech = techs[tech_id];
+  const num = (value) => value === null ? 'null' : value;
+  const tech_span = (name, unit_id, impr_id, title) =>
+    `<span ${title ? `title='${title}'` : ''}`
+    + ` onclick='show_tech_info_dialog("${name}", ${num(unit_id)}, ${num(impr_id)})'>${name}</span>`;
 
-  var adv_txt = "<span onclick='show_tech_info_dialog(\"" +ptech['name'] + "\", null, null);'>" + ptech['name'] + "</span> (" + Math.floor(ptech['cost']) + ") allows ";
-  var prunits = get_units_from_tech(tech_id);
-  var pimprovements = get_improvements_from_tech(tech_id);
+  const is_valid_and_required = (next_tech_id) =>
+    reqtree.hasOwnProperty(next_tech_id) && is_tech_req_for_tech(tech_id, next_tech_id);
 
-  for (var i = 0; i < prunits.length; i++) {
-    if (i == 0) adv_txt += "building unit ";
-    var punit = prunits[i];
-    adv_txt += "<span title='" + punit['helptext'] 
-            + "' onclick='show_tech_info_dialog(\"" + punit['name'] + "\", " + punit['id'] + ", null)'>" 
-            + punit['name'] + "</span>, ";
-  }
+  const format_list_with_intro = (intro, list) =>
+    (list = list.filter(Boolean)).length ? (intro + ' ' + list.join(', ')) : '';
 
-  for (var i = 0; i < pimprovements.length; i++) {
-    if (i == 0) adv_txt += "building ";
-    var pimpr = pimprovements[i];
-    adv_txt += "<span title='" + pimpr['helptext'] 
-            + "' onclick='show_tech_info_dialog(\"" + pimpr['name'] + "\", null, " + pimpr['id'] + ")'>" + pimpr['name'] + "</span>, ";
-  }
+  const ptech = techs[tech_id];
 
-
-  for (var next_tech_id in techs) {
-    var ntech = techs[next_tech_id];
-    if (!(next_tech_id+'' in reqtree)) continue;
-
-    if (is_tech_req_for_tech(tech_id, next_tech_id)) {
-      if (adv_txt.indexOf("researching") == -1) adv_txt += "researching ";
-      adv_txt +=  "<span onclick='show_tech_info_dialog(\"" +ntech['name'] + "\", null, null)'>" + ntech['name'] + "</span>, ";
-    }
-  }
-
-  if (adv_txt.length > 3) adv_txt = adv_txt.substring(0, adv_txt.length - 2) + ".";
-
-  return adv_txt;
+  return tech_span(ptech.name, null, null) + ' (' + Math.floor(ptech.cost) + ')'
+    + format_list_with_intro(' allows',
+      [
+        format_list_with_intro('building unit', get_units_from_tech(tech_id)
+          .map(unit => tech_span(unit.name, unit.id, null, unit.helptext))),
+        format_list_with_intro('building', get_improvements_from_tech(tech_id)
+          .map(impr => tech_span(impr.name, null, impr.id, impr.helptext))),
+        format_list_with_intro('researching', Object.keys(techs)
+          .filter(is_valid_and_required)
+          .map(tid => techs[tid])
+          .map(tech => tech_span(tech.name, null, null)))
+      ]) + '.';
 }
 
 /**************************************************************************
@@ -543,9 +530,9 @@ function get_tech_infobox_html(tech_id)
 {
   var infobox_html = "";
   var ptech = techs[tech_id];
-  var tag = ptech['graphic_str'];
+  var tag = tileset_tech_graphic_tag(ptech);
 
-  if (tileset[tag] == null) return null;
+  if (tag == null) return null;
   var tileset_x = tileset[tag][0];
   var tileset_y = tileset[tag][1];
   var width = tileset[tag][2];
@@ -616,7 +603,6 @@ function show_tech_gained_dialog(tech_gained_id)
 
   $("#tech_tab_item").css("color", "#aa0000");
   var pplayer = client.conn.playing;
-  var pnation = nations[pplayer['nation']];
   var tech = techs[tech_gained_id];
   if (tech == null) return;
 
@@ -937,5 +923,17 @@ function update_bulbs_output_info()
   var cbo = get_current_bulbs_output();
   $('#bulbs_output').html(get_current_bulbs_output_text(cbo));
   update_net_bulbs(cbo.self_bulbs - cbo.self_upkeep);
+}
+
+/**************************************************************************
+ Finds tech id by exact name.
+ Null if not found.
+**************************************************************************/
+function tech_id_by_name(tname)
+{
+  for (var tech_id in techs) {
+    if (tname == techs[tech_id]['name']) return tech_id;
+  }
+  return null;
 }
 

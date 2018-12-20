@@ -121,7 +121,6 @@ function update_tile_unit(punit)
   if (!found) {
     ptile['units'].push(punit);
   }
-
 }
 
 /**************************************************************************
@@ -137,7 +136,6 @@ function clear_tile_unit(punit)
   if (ptile['units'].indexOf(punit) >= 0) {
     ptile['units'].splice(ptile['units'].indexOf(punit), 1);
   }
-
 }
 
 /**************************************************************************
@@ -155,6 +153,15 @@ function unit_list_size(unit_list)
 function unit_type(unit)
 {
   return unit_types[unit['type']];
+}
+
+/**************************************************************************
+  Return TRUE iff this unit can do the specified generalized (ruleset
+  defined) action enabler controlled action.
+**************************************************************************/
+function unit_can_do_action(punit, act_id)
+{
+  return utype_can_do_action(unit_type(punit), act_id);
 }
 
 /**************************************************************************
@@ -339,7 +346,6 @@ function get_unit_homecity_name(punit)
   } else {
     return null;
   }
-
 }
 
 /**************************************************************************
@@ -362,7 +368,6 @@ function is_unit_visible(punit)
   } else {
     return true;
   }
-
 }
 
 /**************************************************************************
@@ -371,7 +376,6 @@ function is_unit_visible(punit)
 function unittype_ids_alphabetic()
 {
   var unittype_names = [];
-  var unit_type;
   var unit_id;
   for (unit_id in unit_types) {
     var punit_type = unit_types[unit_id];
@@ -418,5 +422,66 @@ function get_unit_city_info(punit)
   }
 
   return result;
+}
+
+/**************************************************************************
+ Returns a list of extras a unit can pillage from a tile.
+ It is empty if the unit can't pillage or there's nothing to.
+ Contains just EXTRA_NONE if there's something but the unit can't choose.
+**************************************************************************/
+function get_what_can_unit_pillage_from(punit, ptile)
+{
+  var i, j;
+  var extra;
+  var targets = [];
+  if (punit == null) return targets;
+
+  /* If no tile is given, use the one the unit is on */
+  if (ptile == null) {
+    ptile = index_to_tile(punit.tile);
+  }
+
+  if (terrains[ptile.terrain].pillage_time == 0) return targets;
+  var unit_class = unit_classes[unit_types[punit.type].unit_class_id];
+  if (!unit_class.flags.isSet(UCF_CAN_PILLAGE)) return targets;
+
+  var available = ptile.extras.toBitSet();
+  var cannot_pillage = new BitVector([]);
+
+  /* Get what other units are pillaging on the tile */
+  for (const unit_idx in Object.keys(ptile.units)) {
+    const unit = ptile.units[unit_idx];
+    if (unit.activity === ACTIVITY_PILLAGE) {
+      cannot_pillage.set(unit.activity_tgt);
+    }
+  }
+
+  /* Get what extras that are dependencies of other */
+  for (i = 0; i < available.length; i++) {
+    extra = extras[available[i]];
+    for (j = 0; j < extra.reqs.length; j++) {
+      var req = extra.reqs[j];
+      if (req.kind == VUT_EXTRA && req.present == true) {
+        cannot_pillage.set(req.value);
+      }
+    }
+  }
+
+  // TODO: more things to check?
+
+  for (i = 0; i < available.length; i++) {
+    extra = available[i];
+    if (is_extra_removed_by(extras[extra], ERM_PILLAGE)
+        && !cannot_pillage.isSet(extra)) {
+      if (game_info.pillage_select) {
+        targets.push(extra);
+      } else {
+        targets.push(EXTRA_NONE);
+        break;
+      }
+    }
+  }
+
+  return targets;
 }
 

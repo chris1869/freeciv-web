@@ -17,7 +17,7 @@
 		<!-- Collect the nav links, forms, and other panel-freeciv for toggling -->
 		<div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
 		<ul class="nav navbar-nav">
-			<li><a href="/webclient/?action=new">New Game</a></li>
+			<li><a href="/webclient/?action=new&amp;type=singleplayer">New Game</a></li>
 			<li class="dropdown">
 				<a href="/game/list?v=singleplayer" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">
 					<span onclick="window.location='/game/list?v=singleplayer'">Online Games</span> <span class="caret"></span> <span class="badge ongoing-games-number" id="ongoing-games" title="Ongoing games"></span>
@@ -37,14 +37,11 @@
 					<span onclick="window.location='http://forum.freegamedev.net/viewforum.php?f=97'">Forums</span> <span class="caret"></span>
 				</a>
 				<ul class="dropdown-menu">
-					<li><a href="https://discord.gg/hgvR9wc">Discord chat</a></li>
-					<li role="separator" class="divider"></li>
 					<li><a href="http://forum.freegamedev.net/viewforum.php?f=97">Freeciv-web <fmt:message key="nav-forum"/></a></li>
 					<li role="separator" class="divider"></li>
 					<li><a href="https://www.reddit.com/r/freeciv">reddit.com/freeciv</a></li>
 				</ul>
 			</li>
-			<li><a href="https://play.freeciv.org/blog/"><fmt:message key="nav-blog"/></a></li>
 			<li><a href="http://www.freeciv.org/donate.html"><fmt:message key="nav-donate"/></a></li>
 			<li><a href="https://github.com/freeciv/freeciv-web">Contribute</a></li>
 			<%--<li class="dropdown">
@@ -61,7 +58,7 @@
 			</li>--%>
 		</ul>
 		<form class="navbar-form navbar-right hidden-sm hidden-md" action="https://duckduckgo.com/" style="width: 220px;">
-			<input type="hidden" name="sites" value="www.freeciv.org,forum.freeciv.org,freeciv.wikia.com,play.freeciv.org">
+			<input type="hidden" name="sites" value="www.freeciv.org,forum.freeciv.org,freeciv.wikia.com">
 			<div class="form-group">
 				<div class="input-group">
 					<input type="text" class="form-control" name="q" placeholder="Search Freeciv...">

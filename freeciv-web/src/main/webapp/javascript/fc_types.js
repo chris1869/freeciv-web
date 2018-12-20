@@ -25,6 +25,8 @@ var TRI_YES = 1;
 var TRI_MAYBE = 2;
 
 var MAX_NUM_ITEMS = 200;
+var MAX_NUM_ADVANCES = 250;
+var MAX_EXTRA_TYPES = 128;
 var MAX_LEN_NAME = 48;
 var MAX_LEN_CITYNAME = 50;
 
@@ -102,7 +104,17 @@ var ACTION_AIRLIFT = 40;
 var ACTION_ATTACK = 41;
 var ACTION_CONQUER_CITY = 42;
 var ACTION_HEAL_UNIT = 43;
-var ACTION_COUNT = 44;
+var ACTION_TRANSFORM_TERRAIN = 44;
+var ACTION_IRRIGATE_TF = 45;
+var ACTION_MINE_TF = 46;
+var ACTION_PILLAGE = 47;
+var ACTION_FORTIFY = 48;
+var ACTION_ROAD = 49;
+var ACTION_CONVERT = 50;
+var ACTION_BASE = 51;
+var ACTION_MINE = 52;
+var ACTION_IRRIGATE = 53;
+var ACTION_COUNT = 54;
 
 /* The action_decision enum */
 /* Doesn't need the player to decide what action to take. */
@@ -192,3 +204,20 @@ var V_MAIN = 0;
 var V_INVIS = 1;
 var V_SUBSURFACE = 2;
 var V_COUNT = 3;
+
+/* causes for extra */
+var EC_IRRIGATION = 0;
+var EC_MINE = 1;
+var EC_ROAD = 2;
+var EC_BASE = 3;
+var EC_POLLUTION = 4;
+var EC_FALLOUT = 5;
+var EC_HUT = 6;
+var EC_APPEARANCE = 7;
+var EC_RESOURCE = 8;
+
+/* causes for extra removal */
+var ERM_PILLAGE = 0;
+var ERM_CLEANPOLLUTION = 1;
+var ERM_CLEANFALLOUT = 2;
+var ERM_DISAPPEARANCE = 3;

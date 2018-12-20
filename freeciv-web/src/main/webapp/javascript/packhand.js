@@ -79,7 +79,7 @@ function handle_server_join_reply(packet)
 
     set_client_state(C_S_PREPARING);
 
-    if ($.getUrlVar('action') == "new"
+    if (($.getUrlVar('action') == "new" || $.getUrlVar('action') == "hack")
         && $.getUrlVar('ruleset') != null) {
       change_ruleset($.getUrlVar('ruleset'));
     }
@@ -208,7 +208,7 @@ function handle_chat_msg(packet)
   if (event == null || event < 0 || event >= E_UNDEFINED) {
     console.log('Undefined message event type');
     console.log(packet);
-    packet['event'] = event = E_UNDEFINED;
+    packet['event'] = E_UNDEFINED;
   }
 
   if (connections[conn_id] != null) {
@@ -267,6 +267,9 @@ function handle_city_info(packet)
   /* Decode bit vectors. */
   packet['improvements'] = new BitVector(packet['improvements']);
   packet['city_options'] = new BitVector(packet['city_options']);
+
+  /* Add an unhappy field like the city_short_info packet has. */
+  packet['unhappy'] = city_unhappy(packet);
 
   if (cities[packet['id']] == null) {
     cities[packet['id']] = packet;
@@ -371,13 +374,29 @@ function handle_traderoute_info(packet)
   city_trade_routes[packet['city']][packet['index']] = packet;
 }
 
-/* 100% complete */
+/************************************************************************//**
+  Handle information about a player.
+
+  It is followed by web_player_info_addition that gives additional
+  information only needed by Freeciv-web. Its processing will therefore
+  stop while it waits for the corresponding web_player_info_addition packet.
+****************************************************************************/
 function handle_player_info(packet)
 {
   /* Interpret player flags. */
   packet['flags'] = new BitVector(packet['flags']);
   packet['gives_shared_vision'] = new BitVector(packet['gives_shared_vision']);
 
+  players[packet['playerno']] = $.extend(players[packet['playerno']], packet);
+}
+
+/************************************************************************//**
+  The web_player_info_addition packet is a follow up packet to the
+  player_info packet. It gives some information the C clients calculates on
+  their own.
+****************************************************************************/
+function handle_web_player_info_addition(packet)
+{
   players[packet['playerno']] = $.extend(players[packet['playerno']], packet);
 
   if (client.conn.playing != null) {
@@ -391,7 +410,7 @@ function handle_player_info(packet)
 
   if (is_tech_tree_init && tech_dialog_active) update_tech_screen();
 
-  assign_nation_color(packet['nation']);
+  assign_nation_color(players[packet['playerno']]['nation']);
 }
 
 /* 100% complete */
@@ -491,7 +510,63 @@ function handle_ruleset_control(packet)
   ruleset_summary = null;
   ruleset_description = null;
 
-  /* TODO: implement rest*/
+  game_rules = null;
+  nation_groups = [];
+  nations = {};
+  specialists = {};
+  techs = {};
+  governments = {};
+  terrain_control = {};
+  SINGLE_MOVE = undefined;
+  unit_types = {};
+  unit_classes = {};
+  city_rules = {};
+  terrains = {};
+  resources = {};
+  goods = {};
+  actions = {};
+
+  improvements_init();
+
+  /* handle_ruleset_extra defines some variables dinamically */
+  for (var extra in extras) {
+    var ename = extras[extra]['name'];
+    delete window["EXTRA_" + ename.toUpperCase()];
+    if (ename == "Railroad") delete window["EXTRA_RAIL"];
+    else if (ename == "Oil Well") delete window["EXTRA_OIL_WELL"];
+    else if (ename == "Minor Tribe Village") delete window["EXTRA_HUT"];
+  }
+  extras = {};
+
+  /* Reset legal diplomatic clauses. */
+  clause_infos = {};
+
+  /* TODO: implement rest.
+   * Some ruleset packets don't have handlers *yet*. Remember to clean up
+   * when they are implemented:
+   *   handle_ruleset_government_ruler_title
+   *   handle_ruleset_base
+   *   handle_ruleset_choices
+   *   handle_ruleset_road
+   *   handle_ruleset_disaster
+   *   handle_ruleset_extra_flag
+   *   handle_ruleset_trade
+   *   handle_ruleset_unit_bonus
+   *   handle_ruleset_unit_flag
+   *   handle_ruleset_unit_class_flag
+   *   handle_ruleset_terrain_flag
+   *   handle_ruleset_achievement
+   *   handle_ruleset_tech_flag
+   *   handle_ruleset_action_enabler
+   *   handle_ruleset_nation_sets
+   *   handle_ruleset_style
+   *   handle_ruleset_music
+   *   handle_ruleset_action_auto
+   *
+   * Maybe also:
+   *   handle_rulesets_ready
+   *   handle_nation_availability
+   */
 
 }
 
@@ -579,10 +654,15 @@ function handle_city_name_suggestion_info(packet)
 **************************************************************************/
 function handle_city_sabotage_list(packet)
 {
+  if (!packet["disturb_player"]) {
+    console.log("handle_city_sabotage_list(): was asked to not disturb "
+                + "the player. That is unimplemented.");
+  }
+
   popup_sabotage_dialog(game_find_unit_by_number(packet['diplomat_id']),
                         game_find_city_by_number(packet['city_id']),
                         new BitVector(packet['improvements']),
-                        packet['action_id']);
+                        packet['act_id']);
 }
 
 function handle_player_attribute_chunk(packet)
@@ -613,7 +693,6 @@ function handle_player_attribute_chunk(packet)
 function handle_unit_remove(packet)
 {
   var punit = game_find_unit_by_number(packet['unit_id']);
-  var powner;
 
   if (punit == null) {
     return;
@@ -673,16 +752,7 @@ function handle_unit_short_info(packet)
 **************************************************************************/
 function handle_unit_packet_common(packet_unit)
 {
-  var pcity;
-  var punit;
-  var need_update_menus = true;
-  var repaint_unit = true;
-  var repaint_city = true;
-  var check_focus = true;
-  var moved = true;
-  var ret = true;
-
-  punit = player_find_unit_by_id(unit_owner(packet_unit), packet_unit['id']);
+  var punit = player_find_unit_by_id(unit_owner(packet_unit), packet_unit['id']);
 
   clear_tile_unit(punit);
 
@@ -772,6 +842,11 @@ function handle_unit_action_answer(packet)
     return;
   }
 
+  if (!packet["disturb_player"]) {
+    console.log("handle_unit_action_answer(): was asked to not disturb "
+                + "the player. That is unimplemented.");
+  }
+
   if (action_type == ACTION_SPY_BRIBE_UNIT) {
     if (target_unit == null) {
       console.log("Bad target unit (" + target_id
@@ -844,6 +919,7 @@ function handle_unit_actions(packet)
   var target_unit_id = packet['target_unit_id'];
   var target_city_id = packet['target_city_id'];
   var target_tile_id = packet['target_tile_id'];
+  var target_extra_id = packet['target_extra_id'];
   var action_probabilities = packet['action_probabilities'];
   var disturb_player = packet['disturb_player'];
 
@@ -851,6 +927,7 @@ function handle_unit_actions(packet)
   var target_unit = game_find_unit_by_number(target_unit_id);
   var target_city = game_find_city_by_number(target_city_id);
   var ptile = index_to_tile(target_tile_id);
+  var target_extra = extra_by_number(target_extra_id);
 
   var hasActions = false;
 
@@ -881,7 +958,7 @@ function handle_unit_actions(packet)
 
   if (hasActions && disturb_player) {
     popup_action_selection(pdiplomat, action_probabilities,
-                           ptile, target_unit, target_city);
+                           ptile, target_extra, target_unit, target_city);
   } else if (hasActions) {
     /* This was a background request. */
 
@@ -1055,6 +1132,19 @@ function handle_ruleset_unit(packet)
   unit_types[packet['id']] = packet;
 }
 
+/************************************************************************//**
+  The web_ruleset_unit_addition packet is a follow up packet to the
+  ruleset_unit packet. It gives some information the C clients calculates on
+  their own.
+****************************************************************************/
+function handle_web_ruleset_unit_addition(packet)
+{
+  /* Decode bit vector. */
+  packet['utype_actions'] = new BitVector(packet['utype_actions']);
+
+  unit_types[packet['id']] = $.extend(unit_types[packet['id']], packet);
+}
+
 /* 100% complete */
 function handle_ruleset_game(packet)
 {
@@ -1159,12 +1249,13 @@ function handle_ruleset_city(packet)
 /* 100% complete */
 function handle_ruleset_building(packet)
 {
-  improvements[packet['id']] = packet;
+  improvements_add_building(packet);
 }
 
 function handle_ruleset_unit_class(packet)
 {
-  /* TODO: implement */
+  packet['flags'] = new BitVector(packet['flags']);
+  unit_classes[packet['id']] = packet;
 }
 
 function handle_ruleset_disaster(packet)
@@ -1399,15 +1490,18 @@ function handle_player_diplstate(packet)
 **************************************************************************/
 function handle_ruleset_extra(packet)
 {
+  /* Decode bit vectors. */
+  packet['causes'] = new BitVector(packet['causes']);
+  packet['rmcauses'] = new BitVector(packet['rmcauses']);
+
   extras[packet['id']] = packet;
   extras[packet['name']] = packet;
 
   window["EXTRA_" + packet['name'].toUpperCase()] = packet['id'];
 
   if (packet['name'] == "Railroad") window["EXTRA_RAIL"] = packet['id'];
-  if (packet['name'] == "Oil") window["EXTRA_OIL_WELL"] = packet['id'];
+  if (packet['name'] == "Oil Well") window["EXTRA_OIL_WELL"] = packet['id'];
   if (packet['name'] == "Minor Tribe Village") window["EXTRA_HUT"] = packet['id'];
-
 }
 
 /**************************************************************************
@@ -1504,6 +1598,16 @@ function handle_timeout_info(packet)
   seconds_to_phasedone_sync = new Date().getTime();
 }
 
+/************************************************************************//**
+  Shows image with text and play music
+****************************************************************************/
+function handle_show_img_play_sound(packet)
+{
+  /* TODO: Implement */
+  /* Currently (6th Sep 2018) only used in sandbox. The sandbox ruleset
+   * isn't supported by Freeciv-web at the moment. */
+}
+
 function handle_play_music(packet)
 {
   /* TODO: Implement */
@@ -1531,6 +1635,14 @@ function handle_ruleset_goods(packet)
 function handle_ruleset_achievement(packet)
 {
   /* TODO: Implement. */
+}
+
+/************************************************************************//**
+  Handle a packet about a particular clause.
+****************************************************************************/
+function handle_ruleset_clause(packet)
+{
+  clause_infos[packet['type']] = packet;
 }
 
 function handle_achievement_info(packet)

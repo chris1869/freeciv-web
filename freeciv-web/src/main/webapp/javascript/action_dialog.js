@@ -172,8 +172,8 @@ function format_action_tooltip(act_id, act_probs)
   Returns the function to run when an action is selected.
 **************************************************************************/
 function act_sel_click_function(parent_id,
-                                actor_unit_id, tgt_id, action_id,
-                                action_probabilities)
+                                actor_unit_id, tgt_id, sub_tgt_id,
+                                action_id, action_probabilities)
 {
   switch (action_id) {
   case ACTION_SPY_TARGETED_STEAL_TECH:
@@ -197,7 +197,8 @@ function act_sel_click_function(parent_id,
         "pid"         : packet_unit_action_query,
         "diplomat_id" : actor_unit_id,
         "target_id"   : tgt_id,
-        "action_type" : action_id
+        "action_type" : action_id,
+        "disturb_player" : true
       };
       send_request(JSON.stringify(packet));
 
@@ -214,12 +215,32 @@ function act_sel_click_function(parent_id,
 
       $(parent_id).remove();
     };
+  case ACTION_PILLAGE:
+  case ACTION_ROAD:
+  case ACTION_BASE:
+  case ACTION_MINE:
+  case ACTION_IRRIGATE:
+    return function() {
+      var packet = {
+        "pid"         : packet_unit_do_action,
+        "actor_id"    : actor_unit_id,
+        "target_id"   : tgt_id,
+        "extra_id"    : sub_tgt_id,
+        "value"       : 0,
+        "name"        : "",
+        "action_type" : action_id
+      };
+      send_request(JSON.stringify(packet));
+
+      $(parent_id).remove();
+    };
   default:
     return function() {
       var packet = {
         "pid"         : packet_unit_do_action,
         "actor_id"    : actor_unit_id,
         "target_id"   : tgt_id,
+        "extra_id"    : EXTRA_NONE,
         "value"       : 0,
         "name"        : "",
         "action_type" : action_id
@@ -237,8 +258,8 @@ function act_sel_click_function(parent_id,
   Needed because of JavaScript's scoping rules.
 **************************************************************************/
 function create_act_sel_button(parent_id,
-                               actor_unit_id, tgt_id, action_id,
-                               action_probabilities)
+                               actor_unit_id, tgt_id, sub_tgt_id,
+                               action_id, action_probabilities)
 {
   /* Create the initial button with this action */
   var button = {
@@ -249,8 +270,8 @@ function create_act_sel_button(parent_id,
     title   : format_action_tooltip(action_id,
                                     action_probabilities),
     click   : act_sel_click_function(parent_id,
-                                     actor_unit_id, tgt_id, action_id,
-                                     action_probabilities)
+                                     actor_unit_id, tgt_id, sub_tgt_id,
+                                     action_id, action_probabilities)
   };
 
   /* The button is ready. */
@@ -261,7 +282,8 @@ function create_act_sel_button(parent_id,
   Ask the player to select an action.
 ****************************************************************************/
 function popup_action_selection(actor_unit, action_probabilities,
-                                target_tile, target_unit, target_city)
+                                target_tile, target_extra,
+                                target_unit, target_city)
 {
   // reset dialog page.
   var id = "#act_sel_dialog_" + actor_unit['id'];
@@ -300,6 +322,7 @@ function popup_action_selection(actor_unit, action_probabilities,
    * target kind first and then by action id number. */
   for (var tgt_kind = ATK_CITY; tgt_kind < ATK_COUNT; tgt_kind++) {
     var tgt_id = -1;
+    var sub_tgt_id = -1;
 
     switch (tgt_kind) {
     case ATK_CITY:
@@ -321,6 +344,9 @@ function popup_action_selection(actor_unit, action_probabilities,
       if (target_tile != null) {
         tgt_id = target_tile['index'];
       }
+      if (target_extra != null) {
+        sub_tgt_id = target_extra['id'];
+      }
       break;
     case ATK_SELF:
       if (actor_unit != null) {
@@ -336,8 +362,8 @@ function popup_action_selection(actor_unit, action_probabilities,
       if (actions[action_id]['tgt_kind'] == tgt_kind
           && action_prob_possible(
               action_probabilities[action_id])) {
-        buttons.push(create_act_sel_button(id, actor_unit['id'], tgt_id,
-                                           action_id,
+        buttons.push(create_act_sel_button(id, actor_unit['id'],
+                                           tgt_id, sub_tgt_id, action_id,
                                            action_probabilities));
       }
     }
@@ -361,7 +387,8 @@ function popup_action_selection(actor_unit, action_probabilities,
             "orders"    : [ORDER_MOVE],
             "dir"       : [dir],
             "activity"  : [ACTIVITY_LAST],
-            "target"    : [EXTRA_NONE],
+            "target"    : [0],
+            "extra"     : [EXTRA_NONE],
             "action"    : [ACTION_COUNT],
             "dest_tile" : target_tile['index']
           };
@@ -391,6 +418,20 @@ function popup_action_selection(actor_unit, action_probabilities,
         } });
   }
 
+  if (target_extra != null) {
+    buttons.push({
+        id      : "act_sel_tgt_extra_switch" + actor_unit['id'],
+        "class" : 'act_sel_button',
+        text    : 'Change extra target',
+        click   : function() {
+          select_tgt_extra(actor_unit, target_unit, target_tile,
+                           list_potential_target_extras(actor_unit,
+                                                        target_tile));
+
+          $(id).remove();
+        } });
+  }
+
   /* Special-case handling for auto-attack. */
   if (action_prob_possible(action_probabilities[ACTION_ATTACK])) {
         if (!auto_attack) {
@@ -404,6 +445,7 @@ function popup_action_selection(actor_unit, action_probabilities,
                               "pid"         : packet_unit_do_action,
                               "actor_id"    : actor_unit['id'],
                               "target_id"   : target_tile['index'],
+                              "extra_id"    : EXTRA_NONE,
                               "value"       : 0,
                               "name"        : "",
                               "action_type" : ACTION_ATTACK
@@ -419,6 +461,7 @@ function popup_action_selection(actor_unit, action_probabilities,
               "pid"         : packet_unit_do_action,
               "actor_id"    : actor_unit['id'],
               "target_id"   : target_tile['index'],
+              "extra_id"    : EXTRA_NONE,
               "value"       : 0,
               "name"        : "",
               "action_type" : ACTION_ATTACK
@@ -486,6 +529,7 @@ function popup_bribe_dialog(actor_unit, target_unit, cost, act_id)
       var packet = {"pid" : packet_unit_do_action,
                     "actor_id" : actor_unit['id'],
                     "target_id": target_unit['id'],
+                    "extra_id" : EXTRA_NONE,
                     "value" : 0,
                     "name" : "",
                     "action_type": act_id};
@@ -549,6 +593,7 @@ function popup_incite_dialog(actor_unit, target_city, cost, act_id)
                                  var packet = {"pid" : packet_unit_do_action,
                                                "actor_id" : actor_unit['id'],
                                                "target_id": target_city['id'],
+                                               "extra_id" : EXTRA_NONE,
                                                "value" : 0,
                                                "name" : "",
                                                "action_type": act_id};
@@ -606,6 +651,7 @@ function popup_unit_upgrade_dlg(actor_unit, target_city, cost, act_id)
                                     "pid" : packet_unit_do_action,
                                     "actor_id" : actor_unit['id'],
                                     "target_id": target_city['id'],
+                                    "extra_id" : EXTRA_NONE,
                                     "value" : 0,
                                     "name" : "",
                                     "action_type": act_id
@@ -644,6 +690,7 @@ function create_steal_tech_button(parent_id, tech,
       var packet = {"pid" : packet_unit_do_action,
         "actor_id" : actor_unit_id,
         "target_id": target_city_id,
+        "extra_id" : EXTRA_NONE,
         "value" : tech['id'],
         "name" : "",
         "action_type": action_id};
@@ -720,6 +767,7 @@ function popup_steal_tech_selection_dialog(actor_unit, target_city,
                        "pid" : packet_unit_do_action,
                        "actor_id" : actor_unit['id'],
                        "target_id": target_city['id'],
+                       "extra_id" : EXTRA_NONE,
                        "value" : 0,
                        "name" : "",
                        "action_type": untargeted_action_id};
@@ -764,6 +812,7 @@ function create_sabotage_impr_button(improvement, parent_id,
         "pid"          : packet_unit_do_action,
         "actor_id"     : actor_unit_id,
         "target_id"    : target_city_id,
+        "extra_id"     : EXTRA_NONE,
         "value"        : encode_building_id(improvement['id']),
         "name"         : "",
         "action_type"  : act_id
@@ -856,6 +905,7 @@ function create_select_tgt_unit_button(parent_id, actor_unit_id,
         "actor_unit_id"  : actor_unit_id,
         "target_unit_id" : target_unit_id,
         "target_tile_id" : target_tile_id,
+        "target_extra_id": EXTRA_NONE,
         "disturb_player" : true
       };
       send_request(JSON.stringify(packet));
@@ -899,6 +949,134 @@ function select_tgt_unit(actor_unit, target_tile, potential_tgt_units)
 
   $(id).dialog({
       title    : "Target unit selection",
+      bgiframe : true,
+      modal    : true,
+      buttons  : buttons });
+
+  $(id).dialog('open');
+}
+
+/**************************************************************************
+  List potential extra targets at target_tile
+**************************************************************************/
+function list_potential_target_extras(act_unit, target_tile)
+{
+  var potential_targets = [];
+
+  for (var i = 0; i < ruleset_control.num_extra_types; i++) {
+    var pextra = extras[i];
+
+    if (tile_has_extra(target_tile, pextra.id)) {
+      /* This extra is at the tile. Can anything be done to it? */
+      if (is_extra_removed_by(pextra, ERM_PILLAGE)
+          && unit_can_do_action(act_unit, ACTION_PILLAGE)) {
+        /* TODO: add more extra removal actions as they appear. */
+        potential_targets.push(pextra);
+      }
+    } else {
+      /* This extra isn't at the tile yet. Can it be created? */
+      if (pextra.buildable
+          && ((is_extra_caused_by(pextra, EC_IRRIGATION)
+               && unit_can_do_action(act_unit, ACTION_IRRIGATE))
+              || (is_extra_caused_by(pextra, EC_MINE)
+                  && unit_can_do_action(act_unit, ACTION_MINE))
+              || (is_extra_caused_by(pextra, EC_BASE)
+                  && unit_can_do_action(act_unit, ACTION_BASE))
+              || (is_extra_caused_by(pextra, EC_ROAD)
+                  && unit_can_do_action(act_unit, ACTION_ROAD)))) {
+        /* TODO: add more extra creation actions as they appear. */
+        potential_targets.push(pextra);
+      }
+    }
+  }
+
+  return potential_targets;
+}
+
+/**************************************************************************
+  Create a button that selects a target extra.
+
+  Needed because of JavaScript's scoping rules.
+**************************************************************************/
+function create_select_tgt_extra_button(parent_id, actor_unit_id,
+                                        target_unit_id,
+                                        target_tile_id, target_extra_id)
+{
+  var text = "";
+  var button = {};
+
+  var target_tile = index_to_tile(target_tile_id);
+
+  text += extras[target_extra_id]['name'];
+
+  text += " (";
+  if (tile_has_extra(target_tile, target_extra_id)) {
+    if (extra_owner(target_tile) != null) {
+      text += nations[extra_owner(target_tile)['nation']]['adjective'];
+    } else {
+      text += "target";
+    }
+  } else {
+    text += "create";
+  }
+  text += ")";
+
+  button = {
+    text  : text,
+    click : function() {
+      var packet = {
+        "pid"            : packet_unit_get_actions,
+        "actor_unit_id"  : actor_unit_id,
+        "target_unit_id" : target_unit_id,
+        "target_tile_id" : target_tile_id,
+        "target_extra_id": target_extra_id,
+        "disturb_player" : true
+      };
+      send_request(JSON.stringify(packet));
+
+      $(parent_id).remove();
+    }
+  };
+
+  /* The button is ready. */
+  return button;
+}
+
+/**************************************************************************
+  Create a dialog where a unit select what other unit to act on.
+**************************************************************************/
+function select_tgt_extra(actor_unit, target_unit,
+                          target_tile, potential_tgt_extras)
+{
+  var i;
+
+  var rid     = "sel_tgt_extra_dialog_" + actor_unit['id'];
+  var id      = "#" + rid;
+  var dhtml   = "";
+  var buttons = [];
+
+  /* Reset dialog page. */
+  $(id).remove();
+  $("<div id='" + rid + "'></div>").appendTo("div#game_page");
+
+  dhtml += "Select target extra for your ";
+  dhtml += unit_types[actor_unit['type']]['name'];
+
+  $(id).html(dhtml);
+
+  for (i = 0; i < potential_tgt_extras.length; i++) {
+    var tgt_extra = potential_tgt_extras[i];
+
+    buttons.push(create_select_tgt_extra_button(id, actor_unit['id'],
+                                                target_unit == null ?
+                                                  IDENTITY_NUMBER_ZERO :
+                                                  target_unit['id'],
+                                                target_tile['index'],
+                                                tgt_extra['id']));
+  }
+
+  $(id).dialog({
+      title    : "Target extra selection",
       bgiframe : true,
       modal    : true,
       buttons  : buttons });

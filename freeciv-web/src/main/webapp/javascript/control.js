@@ -54,7 +54,9 @@ var context_menu_active = true;
 var has_movesleft_warning_been_shown = false;
 var game_unit_panel_state = null;
 
-var send_to_allies = false;
+var chat_send_to = -1;
+var CHAT_ICON_EVERYBODY = String.fromCharCode(62075);
+var CHAT_ICON_ALLIES = String.fromCharCode(61746);
 var end_turn_info_message_shown = false;
 
 /****************************************************************************
@@ -62,15 +64,13 @@ var end_turn_info_message_shown = false;
 ****************************************************************************/
 function control_init()
 {
-
   if (renderer == RENDERER_2DCANVAS) {
     mapctrl_init_2d();
   } else {
     init_webgl_mapctrl();
   }
 
-  $(document).keydown(keyboard_listener);
-  $(document).keydown(city_keyboard_listener);
+  $(document).keydown(global_keyboard_listener);
   $(window).resize(mapview_window_resized);
   $(window).bind('orientationchange resize', orientation_changed);
 
@@ -95,8 +95,8 @@ function control_init()
     resize_enabled = true;
   });
 
-  $("#chat_box_allies").click(function(event) {
-    toggle_send_to_allies();
+  $("#chat_direction").click(function(event) {
+    chat_context_change();
   });
 
   $("#pregame_text_input").keydown(function(event) {
@@ -178,10 +178,6 @@ function control_init()
 
   $.contextMenu(context_options);
 
-  $(window).bind('beforeunload', function(){
-    return "Do you really want to leave your nation behind now?";
-  });
-
   $(window).on('unload', function(){
     network_stop();
   });
@@ -234,7 +230,7 @@ function control_init()
     $("#game_unit_orders_default").tooltip();
   }
 
-  $("#game_overview_map").click(function(e) {
+  $("#overview_map").click(function(e) {
     var x = e.pageX - $(this).offset().left;
     var y = e.pageY - $(this).offset().top;
     overview_clicked (x, y);
@@ -258,15 +254,11 @@ function control_init()
   $('#nations_list').on('click', 'tbody tr', handle_nation_table_select);
 
   /* prevents keyboard input from changing tabs. */
-  $('#tabs').tabs({
-    activate: function (event, ui) {
-        ui.newTab.blur();
-    }
-  });
-  $('#tabs a').click(function () {
-    $(this).blur();
-  });
+  $('#tabs>ul>li').off('keydown');
+  $('#tabs>div').off('keydown');
 
+  $('#tabs-map').keydown(map_keyboard_listener);
+  $('#map_tab').keydown(map_keyboard_listener);
 }
 
 /****************************************************************************
@@ -346,12 +338,10 @@ function mouse_moved_cb(e)
       touch_start_y = mouse_y;
       update_mouse_cursor();
     }
-
   } else if (active_city != null && city_canvas != null
              && $("#city_canvas").length) {
     mouse_x = mouse_x - $("#city_canvas").offset().left;
     mouse_y = mouse_y - $("#city_canvas").offset().top;
-
   }
 
   if (client.conn.playing == null) return;
@@ -368,8 +358,6 @@ function mouse_moved_cb(e)
       && (new Date().getTime() - map_select_check_started) > 200)  {
     map_select_active = true;
   }
-
-
 }
 
 /****************************************************************************
@@ -377,7 +365,6 @@ function mouse_moved_cb(e)
 ****************************************************************************/
 function update_mouse_cursor()
 {
-
   if (tech_dialog_active && !is_touch_device()) {
     update_tech_dialog_cursor();
     return;
@@ -413,18 +400,226 @@ function update_mouse_cursor()
   } else {
     $("#canvas_div").css("cursor", "default");
   }
-
 }
 
 /****************************************************************************
-...
+ Set the chatbox messages context to the next item on the list if it is
+ small. Otherwise, show a dialog for the user to select one.
 ****************************************************************************/
-function toggle_send_to_allies() {
-  send_to_allies = !send_to_allies;
-  $("#chat_box_allies").attr("data-toggle", send_to_allies ? "true" : "false")
-                       .attr("title", send_to_allies ?
-                         "Sending to allies (push to toggle)" :
-                         "Sending to all (push to toggle)");
+function chat_context_change() {
+  var recipients = chat_context_get_recipients();
+  if (recipients.length < 4) {
+    chat_context_set_next(recipients);
+  } else {
+    chat_context_dialog_show(recipients);
+  }
+}
+
+/****************************************************************************
+ Get ordered list of possible alive human chatbox messages recipients.
+****************************************************************************/
+function chat_context_get_recipients() {
+  var allies = false;
+  var pm = [];
+
+  pm.push({id: null, flag: null, description: 'Everybody'});
+
+  var self = -1;
+  if (client.conn.playing != null) {
+    self = client.conn.playing['playerno'];
+  }
+
+  for (var player_id in players) {
+    if (player_id == self) continue;
+
+    var pplayer = players[player_id];
+    if (pplayer['flags'].isSet(PLRF_AI)) continue;
+    if (!pplayer['is_alive']) continue;
+    if (is_longturn() && pplayer['name'].indexOf("New Available Player") != -1) continue;
+
+    var nation = nations[pplayer['nation']];
+    if (nation == null) continue;
+
+    // TODO: add connection state, to list connected players first
+    pm.push({
+      id: player_id,
+      description: pplayer['name'] + " of the " + nation['adjective'],
+      flag: sprites["f." + nation['graphic_str']]
+    });
+
+    if (diplstates[player_id] == DS_ALLIANCE) {
+      allies = true;
+    }
+  }
+
+  if (allies && self >= 0) {
+    pm.push({id: self, flag: null, description: 'Allies'});
+  }
+
+  pm.sort(function (a, b) {
+    if (a.id == null) return -1;
+    if (b.id == null) return 1;
+    if (a.id == self) return -1;
+    if (b.id == self) return 1;
+    if (a.description < b.description) return -1;
+    if (a.description > b.description) return 1;
+    return 0;
+  });
+
+  return pm;
+}
+
+/****************************************************************************
+ Switch chatbox messages recipients.
+****************************************************************************/
+function chat_context_set_next(recipients) {
+  var next = 0;
+  while (next < recipients.length && recipients[next].id != chat_send_to) {
+    next++;
+  }
+  next++;
+  if (next >= recipients.length) {
+    next = 0;
+  }
+
+  set_chat_direction(recipients[next].id);
+}
+
+/****************************************************************************
+ Show a dialog for the user to select the default recipient of
+ chatbox messages.
+****************************************************************************/
+function chat_context_dialog_show(recipients) {
+  var dlg = $("#chat_context_dialog");
+  if (dlg.length > 0) {
+    dlg.dialog('close');
+    dlg.remove();
+  }
+  $("<div id='chat_context_dialog' title='Choose chat recipient'></div>")
+    .appendTo("div#game_page");
+
+  var self = -1;
+  if (client.conn.playing != null) {
+    self = client.conn.playing['playerno'];
+  }
+
+  var tbody_el = document.createElement('tbody');
+
+  var add_row = function (id, flag, description) {
+    var flag_canvas, ctx, row, cell;
+    row = document.createElement('tr');
+    cell = document.createElement('td');
+    flag_canvas = document.createElement('canvas');
+    flag_canvas.width = 29;
+    flag_canvas.height = 20;
+    ctx = flag_canvas.getContext("2d");
+    if (flag != null) {
+      ctx.drawImage(flag, 0, 0);
+    }
+    cell.appendChild(flag_canvas);
+    row.appendChild(cell);
+    cell = document.createElement('td');
+    cell.appendChild(document.createTextNode(description));
+    row.appendChild(cell);
+    if (id != null) {
+      $(row).data("chatSendTo", id);
+    }
+    tbody_el.appendChild(row);
+    return ctx;
+  }
+
+  for (var i = 0; i < recipients.length; i++) {
+    if (recipients[i].id != chat_send_to) {
+      var ctx = add_row(recipients[i].id, recipients[i].flag,
+                        recipients[i].description);
+
+      if (recipients[i].id == null || recipients[i].id == self) {
+        ctx.font = "18px FontAwesome";
+        ctx.fillStyle = "rgba(32, 32, 32, 1)";
+        if (recipients[i].id == null) {
+          ctx.fillText(CHAT_ICON_EVERYBODY, 5, 15);
+        } else {
+          ctx.fillText(CHAT_ICON_ALLIES, 8, 16);
+        }
+      }
+    }
+  }
+
+  var table = document.createElement('table');
+  table.appendChild(tbody_el);
+  $(table).on('click', 'tbody tr', handle_chat_direction_chosen);
+  $(table).appendTo("#chat_context_dialog");
+
+  $("#chat_context_dialog").dialog({
+    bgiframe: true,
+    modal: false,
+    maxHeight: 0.9 * $(window).height()
+  }).dialogExtend({
+    minimizable: true,
+    closable: true,
+    icons: {
+      minimize: "ui-icon-circle-minus",
+      restore: "ui-icon-bullet"
+    }
+  });
+
+  $("#chat_context_dialog").dialog('open');
+}
+
+/****************************************************************************
+ Handle a choice in the chat context dialog.
+****************************************************************************/
+function handle_chat_direction_chosen(ev) {
+  var new_send_to = $(this).data("chatSendTo");
+  $("#chat_context_dialog").dialog('close');
+  if (new_send_to == null) {
+    set_chat_direction(null);
+  } else {
+    set_chat_direction(parseFloat(new_send_to));
+  }
+}
+
+/****************************************************************************
+ Set the context for the chatbox.
+****************************************************************************/
+function set_chat_direction(player_id) {
+
+  if (player_id == chat_send_to) return;
+
+  var player_name;
+  var icon = $("#chat_direction");
+  if (icon.length <= 0) return;
+  var ctx = icon[0].getContext("2d");
+
+  if (player_id == null || player_id < 0) {
+    player_id = null;
+    ctx.clearRect(0, 0, 29, 20);
+    ctx.font = "18px FontAwesome";
+    ctx.fillStyle = "rgba(192, 192, 192, 1)";
+    ctx.fillText(CHAT_ICON_EVERYBODY, 7, 15);
+    player_name = 'everybody';
+  } else if (client.conn.playing != null
+             && player_id == client.conn.playing['playerno']) {
+    ctx.clearRect(0, 0, 29, 20);
+    ctx.font = "18px FontAwesome";
+    ctx.fillStyle = "rgba(192, 192, 192, 1)";
+    ctx.fillText(CHAT_ICON_ALLIES, 10, 16);
+    player_name = 'allies';
+  } else {
+    var pplayer = players[player_id];
+    if (pplayer == null) return;
+    player_name = pplayer['name']
+                + " of the " + nations[pplayer['nation']]['adjective'];
+    ctx.clearRect(0, 0, 29, 20);
+    var flag = sprites["f." + nations[pplayer['nation']]['graphic_str']];
+    if (flag != null) {
+      ctx.drawImage(flag, 0, 0);
+    }
+  }
+
+  icon.attr("title", "Sending messages to " + player_name);
+  chat_send_to = player_id;
+  $("#game_text_input").focus();
 }
 
 /****************************************************************************
@@ -472,8 +667,36 @@ function check_text_input(event,chatboxtextarea) {
   if (event.keyCode == 13 && event.shiftKey == 0)  {
     var message = $(chatboxtextarea).val();
 
-    if (send_to_allies && is_unprefixed_message(message)) {
-      message = encode_message_text(". " + message);
+    if (chat_send_to != null && chat_send_to >= 0
+        && is_unprefixed_message(message)) {
+      if (client.conn.playing != null
+          && chat_send_to == client.conn.playing['playerno']) {
+        message = ". " + encode_message_text(message);
+      } else {
+        var pplayer = players[chat_send_to];
+        if (pplayer == null) {
+          // Change to public chat, don't send the message,
+          // keep it in the chatline and hope the user notices
+          set_chat_direction(null);
+          return;
+        }
+        var player_name = pplayer['name'];
+        /* TODO:
+           - Spaces before ':' not good for longturn yet
+           - Encoding characters in the name also does not work
+           - Sending a ' or " cuts the message
+           So we send the name unencoded, cut until the first "special" character
+           and hope that is unique enough to recognize the player. It usually is.
+         */
+        var badchars = [' ', '"', "'"];
+        for (var c in badchars) {
+          var i = player_name.indexOf(badchars[c]);
+          if (i > 0) {
+            player_name = player_name.substring(0, i);
+          }
+        }
+        message = player_name + encode_message_text(": " + message);
+      }
     } else {
       message = encode_message_text(message);
     }
@@ -511,7 +734,6 @@ function check_text_input(event,chatboxtextarea) {
 ****************************************************************************/
 function get_focus_unit_on_tile(ptile)
 {
-
   var funits = get_units_in_focus();
   if (funits == null) return null;
 
@@ -578,7 +800,6 @@ function update_unit_focus()
   }
 
   advance_unit_focus();
-
 }
 
 /**************************************************************************
@@ -591,8 +812,6 @@ function update_unit_focus()
 function advance_unit_focus()
 {
   if (client_is_observer()) return;
-
-  var funits = get_units_in_focus();
 
   var candidate = find_best_focus_candidate(false);
 
@@ -625,7 +844,6 @@ function advance_unit_focus()
       message_log.update({ event: E_BEGINNER_HELP, message: "All units have moved, click the \"Turn Done\" button to end your turn."});
     }
   }
-
 }
 
 /**************************************************************************
@@ -658,13 +876,14 @@ function update_unit_order_commands()
     if (ptile == null) continue;
     pcity = tile_city(ptile);
 
-    if (ptype['name'] == "Settlers") {
+    if (utype_can_do_action(ptype, ACTION_FOUND_CITY)
+        && pcity == null) {
       $("#order_build_city").show();
-      if (pcity == null) {
-        unit_actions["build"] = {name: "Build city (B)"};
-      } else {
-        unit_actions["build"] = {name: "Join city (B)"};
-      }
+      unit_actions["build"] = {name: "Build city (B)"};
+    } else if (utype_can_do_action(ptype, ACTION_JOIN_CITY)
+               && pcity != null) {
+      $("#order_build_city").show();
+      unit_actions["build"] = {name: "Join city (B)"};
     } else {
       $("#order_build_city").hide();
     }
@@ -697,10 +916,10 @@ function update_unit_order_commands()
       if (!tile_has_extra(ptile, EXTRA_ROAD)) {
         $("#order_road").show();
         $("#order_railroad").hide();
-        if (!(tile_has_extra(ptile, EXTRA_RIVER) && player_invention_state(client.conn.playing, 8) == TECH_UNKNOWN)) {
+        if (!(tile_has_extra(ptile, EXTRA_RIVER) && player_invention_state(client.conn.playing, tech_id_by_name('Bridge Building')) == TECH_UNKNOWN)) {
 	      unit_actions["road"] = {name: "Build road (R)"};
 	    }
-      } else if (player_invention_state(client.conn.playing, 65) == TECH_KNOWN
+      } else if (player_invention_state(client.conn.playing, tech_id_by_name('Railroad')) == TECH_KNOWN
                  && tile_has_extra(ptile, EXTRA_ROAD)
                && !tile_has_extra(ptile, EXTRA_RAIL)) {
         $("#order_road").hide();
@@ -710,7 +929,7 @@ function update_unit_order_commands()
         $("#order_road").hide();
         $("#order_railroad").hide();
       }
-      if (tile_has_extra(ptile, EXTRA_RIVER) && player_invention_state(client.conn.playing, 8) == TECH_UNKNOWN) {
+      if (tile_has_extra(ptile, EXTRA_RIVER) && player_invention_state(client.conn.playing, tech_id_by_name('Bridge Building')) == TECH_UNKNOWN) {
         $("#order_road").hide();
       }
 
@@ -738,24 +957,31 @@ function update_unit_order_commands()
       if (tile_terrain(ptile)['name'] == "Forest") {
         $("#order_forest_remove").show();
         $("#order_irrigate").hide();
+        $("#order_build_farmland").hide();
 	    unit_actions["forest"] = {name: "Cut down forest (I)"};
       } else if (!tile_has_extra(ptile, EXTRA_IRRIGATION)) {
         $("#order_irrigate").show();
         $("#order_forest_remove").hide();
+        $("#order_build_farmland").hide();
         unit_actions["irrigation"] = {name: "Irrigation (I)"};
         if (tile_terrain(ptile)['name'] != 'Hills' && tile_terrain(ptile)['name'] != 'Mountains') {
           unit_actions["mine"] = {name: "Plant forest (M)"};
         }
+      } else if (!tile_has_extra(ptile, EXTRA_FARMLAND) && player_invention_state(client.conn.playing, tech_id_by_name('Refrigeration')) == TECH_KNOWN) {
+        $("#order_build_farmland").show();
+        $("#order_irrigate").hide();
+        $("#order_forest_remove").hide();
+        unit_actions["irrigation"] = {name: "Build farmland (I)"};
       } else {
         $("#order_forest_remove").hide();
         $("#order_irrigate").hide();
-
+        $("#order_build_farmland").hide();
       }
-      if (player_invention_state(client.conn.playing, 19) == TECH_KNOWN) {
+      if (player_invention_state(client.conn.playing, tech_id_by_name('Construction')) == TECH_KNOWN) {
         unit_actions["fortress"] = {name: string_unqualify(terrain_control['gui_type_base0']) + " (Shift-F)"};
       }
 
-      if (player_invention_state(client.conn.playing, 64) == TECH_KNOWN) {
+      if (player_invention_state(client.conn.playing, tech_id_by_name('Radio')) == TECH_KNOWN) {
         unit_actions["airbase"] = {name: string_unqualify(terrain_control['gui_type_base1']) + " (E)"};
       }
 
@@ -764,6 +990,7 @@ function update_unit_order_commands()
       $("#order_railroad").hide();
       $("#order_mine").hide();
       $("#order_irrigate").hide();
+      $("#order_build_farmland").hide();
       $("#order_fortify").show();
       $("#order_auto_settlers").hide();
       $("#order_sentry").show();
@@ -775,42 +1002,44 @@ function update_unit_order_commands()
     /* Practically all unit types can currently perform some action. */
     unit_actions["action_selection"] = {name: "Do... (D)"};
 
-    if (ptype['name'] == "Engineers") {
+    if (utype_can_do_action(ptype, ACTION_TRANSFORM_TERRAIN)) {
       $("#order_transform").show();
       unit_actions["transform"] = {name: "Transform terrain (O)"};
     } else {
       $("#order_transform").hide();
     }
 
-    if (ptype['name'] == "Nuclear") {
+    if (utype_can_do_action(ptype, ACTION_NUKE)) {
       $("#order_nuke").show();
       unit_actions["nuke"] = {name: "Detonate Nuke At (Shift-N)"};
     } else {
       $("#order_nuke").hide();
     }
 
-    if (ptype['name'] == "Paratroopers") {
+    if (utype_can_do_action(ptype, ACTION_PARADROP)) {
       $("#order_paradrop").show();
       unit_actions["paradrop"] = {name: "Paradrop"};
     } else {
       $("#order_paradrop").hide();
     }
 
-    if (!client_is_observer() && client.conn.playing != null && ptype['attack_strength'] > 0 && (pcity == null || pcity != null && city_owner_player_id(pcity) != client.conn.playing.playerno)) {
+    if (!client_is_observer() && client.conn.playing != null
+        && get_what_can_unit_pillage_from(punit, ptile).length > 0
+        && (pcity == null || city_owner_player_id(pcity) !== client.conn.playing.playerno)) {
       $("#order_pillage").show();
       unit_actions["pillage"] = {name: "Pillage (Shift-P)"};
     } else {
       $("#order_pillage").hide();
     }
 
-    if (pcity == null || punit['homecity'] == 0 || (pcity != null && punit['homecity'] == pcity['id'])) {
+    if (pcity == null || punit['homecity'] === 0 || punit['homecity'] === pcity['id']) {
       $("#order_change_homecity").hide();
     } else if (pcity != null && punit['homecity'] != pcity['id']) {
       $("#order_change_homecity").show();
       unit_actions["homecity"] = {name: "Change homecity of unit (H)"};
     }
 
-    if (pcity != null && city_has_building(pcity, 0)) {
+    if (pcity != null && city_has_building(pcity, improvement_id_by_name(B_AIRPORT_NAME))) {
       unit_actions["airlift"] = {name: "Airlift (Shift-L)"};
     }
 
@@ -823,7 +1052,6 @@ function update_unit_order_commands()
 
     // Load unit on transport
     if (pcity != null) {
-      var has_transport_unit = false;
       var units_on_tile = tile_units(ptile);
       for (var r = 0; r < units_on_tile.length; r++) {
         var tunit = units_on_tile[r];
@@ -834,7 +1062,6 @@ function update_unit_order_commands()
     }
 
     // Unload unit from transport
-    var has_transport_unit = false;
     var units_on_tile = tile_units(ptile);
     if (ptype['transport_capacity'] > 0 && units_on_tile.length >= 2) {
       for (var r = 0; r < units_on_tile.length; r++) {
@@ -846,12 +1073,16 @@ function update_unit_order_commands()
       }
     }
 
+    if (punit.activity != ACTIVITY_IDLE || punit.ai || punit.has_orders) {
+      unit_actions["idle"] = {name: "Cancel orders (Shift-J)"};
+    } else {
+      unit_actions["noorders"] = {name: "No orders (J)"};
+    }
   }
 
   unit_actions = $.extend(unit_actions, {
             "sentry": {name: "Sentry (S)"},
             "wait": {name: "Wait (W)"},
-            "noorders": {name: "No orders (J)"},
             "disband": {name: "Disband (Shift-D)"}
             });
 
@@ -882,7 +1113,8 @@ function init_game_unit_panel()
 			resizable: false,
 			closeOnEscape: false,
 			dialogClass: 'unit_dialog  no-close',
-			position: {my: 'right bottom', at: 'right bottom', of: window, within: $("#game_page")},
+			position: {my: 'right bottom', at: 'right bottom', of: window, within: $("#tabs-map")},
+			appendTo: '#tabs-map',
 			close: function(event, ui) { unitpanel_active = false;}
 
 		}).dialogExtend({
@@ -1008,7 +1240,6 @@ function set_unit_focus_and_redraw(punit)
   update_active_units_dialog();
   update_unit_order_commands();
   if (current_focus.length > 0 && $("#game_unit_orders_default").length > 0 && !cardboard_vr_enabled) $("#game_unit_orders_default").show();
-
 }
 
 /**************************************************************************
@@ -1018,7 +1249,6 @@ function set_unit_focus_and_activate(punit)
 {
   set_unit_focus_and_redraw(punit);
   request_new_unit_activity(punit, ACTIVITY_IDLE, EXTRA_NONE);
-
 }
 
 /**************************************************************************
@@ -1063,10 +1293,6 @@ Return a pointer to a visible unit, if there is one.
 **************************************************************************/
 function find_visible_unit(ptile)
 {
-  var panyowned = null;
-  var panyother = null;
-  var ptptother = null;
-  var pfocus = null;
   var i;
 
   /* If no units here, return nothing. */
@@ -1075,7 +1301,7 @@ function find_visible_unit(ptile)
   }
 
   /* If the unit in focus is at this tile, show that on top */
-  pfocus = get_focus_unit_on_tile(ptile);
+  var pfocus = get_focus_unit_on_tile(ptile);
   if (pfocus != null) {
     return pfocus;
   }
@@ -1227,6 +1453,7 @@ function do_map_click(ptile, qtype, first_time_called)
         packet['dir'] = [];
         packet['activity'] = [];
         packet['target'] = [];
+        packet['extra'] = [];
         packet['action'] = [];
         for (var i = 0; i < goto_path['length']; i++) {
           /* TODO: Have the server send the full orders in stead of just the
@@ -1245,7 +1472,8 @@ function do_map_click(ptile, qtype, first_time_called)
 
           packet['dir'][i] = goto_path['dir'][i];
           packet['activity'][i] = ACTIVITY_LAST;
-          packet['target'][i] = EXTRA_NONE;
+          packet['target'][i] = 0;
+          packet['extra'][i] = EXTRA_NONE;
           packet['action'][i] = ACTION_COUNT;
         }
 
@@ -1267,7 +1495,8 @@ function do_map_click(ptile, qtype, first_time_called)
             packet['orders'][pos] = ORDER_LAST;
             packet['dir'][pos] = -1;
             packet['activity'][pos] = ACTIVITY_LAST;
-            packet['target'][pos] = EXTRA_NONE;
+            packet['target'][pos] = 0;
+            packet['extra'][pos] = EXTRA_NONE;
             packet['action'][pos] = ACTION_COUNT;
           } else {
             /* Replace the existing last order with the final order */
@@ -1313,7 +1542,7 @@ function do_map_click(ptile, qtype, first_time_called)
       GOTO from the context menu or clicks the goto icon. Then the goto path
       has to be requested first, and then do_map_click will be called again
       to issue the unit order based on the goto path. */
-      if (ptile != null && current_focus.length > 0) {
+      if (current_focus.length > 0) {
         request_goto_path(current_focus[0]['id'], ptile['x'], ptile['y']);
         if (first_time_called) {
           setTimeout(function(){
@@ -1321,7 +1550,6 @@ function do_map_click(ptile, qtype, first_time_called)
           }, 250);
         }
         return;
-
       }
     }
 
@@ -1334,6 +1562,7 @@ function do_map_click(ptile, qtype, first_time_called)
       "pid"         : packet_unit_do_action,
       "actor_id"    : punit['id'],
       "target_id"   : ptile['index'],
+      "extra_id"    : EXTRA_NONE,
       "value"       : 0,
       "name"        : "",
       "action_type" : ACTION_PARADROP
@@ -1349,6 +1578,7 @@ function do_map_click(ptile, qtype, first_time_called)
         "pid"         : packet_unit_do_action,
         "actor_id"    : punit['id'],
         "target_id"   : pcity['id'],
+        "extra_id"    : EXTRA_NONE,
         "value"       : 0,
         "name"        : "",
         "action_type" : ACTION_AIRLIFT
@@ -1418,7 +1648,7 @@ function do_map_click(ptile, qtype, first_time_called)
 /**************************************************************************
  Callback to handle keyboard events
 **************************************************************************/
-function keyboard_listener(ev)
+function global_keyboard_listener(ev)
 {
   // Check if focus is in chat field, where these keyboard events are ignored.
   if ($('input:focus').length > 0 || !keyboard_input) return;
@@ -1431,21 +1661,67 @@ function keyboard_listener(ev)
   civclient_handle_key(keyboard_key, ev.keyCode, ev['ctrlKey'],  ev['altKey'], ev['shiftKey'], ev);
 
   if (renderer == RENDERER_2DCANVAS) $("#canvas").contextMenu('hide');
-
 }
 
 /**************************************************************************
- Handles everything when the user typed on the keyboard.
+ Handles global keybindings.
 **************************************************************************/
 function
 civclient_handle_key(keyboard_key, key_code, ctrl, alt, shift, the_event)
 {
+  switch (keyboard_key) {
+    case 'S':
+      if (ctrl) {
+        the_event.preventDefault();
+        quicksave();
+      }
+    break;
 
+    case 'Q':
+      if (alt) civclient_benchmark(0);
+    break;
+
+    case 'D':
+      if ((!shift) && (alt || ctrl)) {
+        show_debug_info();
+      }
+    break;
+
+    default:
+      if (key_code == 13 && shift && C_S_RUNNING == client_state()) {
+        send_end_turn();
+      }
+  }
+}
+
+/**************************************************************************
+ Callback to handle map keyboard events
+**************************************************************************/
+function map_keyboard_listener(ev)
+{
+  // Check if focus is in chat field, where these keyboard events are ignored.
+  if ($('input:focus').length > 0 || !keyboard_input) return;
+
+  if (C_S_RUNNING != client_state()) return;
+
+  if (!ev) ev = window.event;
+  var keyboard_key = String.fromCharCode(ev.keyCode);
+
+  map_handle_key(keyboard_key, ev.keyCode, ev['ctrlKey'],  ev['altKey'], ev['shiftKey'], ev);
+
+  if (renderer == RENDERER_2DCANVAS) $("#canvas").contextMenu('hide');
+}
+
+/**************************************************************************
+ Handles map keybindings.
+**************************************************************************/
+function
+map_handle_key(keyboard_key, key_code, ctrl, alt, shift, the_event)
+{
   switch (keyboard_key) {
     case 'B':
       request_unit_build_city();
-
-      break;
+    break;
 
     case 'G':
       if (current_focus.length > 0) {
@@ -1478,7 +1754,11 @@ civclient_handle_key(keyboard_key, key_code, ctrl, alt, shift, the_event)
     break;
 
     case 'J':
-      key_unit_noorders();
+      if (shift) {
+        key_unit_idle();
+      } else {
+        key_unit_noorders();
+      }
     break;
 
     case 'R':
@@ -1503,18 +1783,16 @@ civclient_handle_key(keyboard_key, key_code, ctrl, alt, shift, the_event)
       key_unit_irrigate();
     break;
 
-   case 'U':
+    case 'U':
       key_unit_upgrade();
     break;
 
     case 'S':
-      if (ctrl) {
-        the_event.preventDefault();
-        quicksave();
-      } else {
+      if (!ctrl) {
         key_unit_sentry();
       }
     break;
+
     case 'P':
       if (shift) {
         key_unit_pillage();
@@ -1541,9 +1819,7 @@ civclient_handle_key(keyboard_key, key_code, ctrl, alt, shift, the_event)
       } else if (current_focus.length > 0) {
         auto_center_on_focus_unit();
       }
-
     break;
-
 
     case 'N':
       if (shift) {
@@ -1553,16 +1829,10 @@ civclient_handle_key(keyboard_key, key_code, ctrl, alt, shift, the_event)
       }
     break;
 
-    case 'Q':
-      if (alt) civclient_benchmark(0);
-    break;
-
     case 'D':
       if (shift) {
         key_unit_disband();
-      } else if (alt || ctrl) {
-        show_debug_info();
-      } else {
+      } else if (!(alt || ctrl)) {
         key_unit_action_select();
       }
     break;
@@ -1570,14 +1840,10 @@ civclient_handle_key(keyboard_key, key_code, ctrl, alt, shift, the_event)
   }
 
   switch (key_code) {
-    case 13:
-      if (shift && C_S_RUNNING == client_state()) send_end_turn();
-      break;
-
     case 35: //1
     case 97:
       key_unit_move(DIR8_SOUTH);
-    break;
+      break;
 
     case 40: // 2
     case 98:
@@ -1653,9 +1919,9 @@ civclient_handle_key(keyboard_key, key_code, ctrl, alt, shift, the_event)
     case 107:
       //zoom in
       if (renderer == RENDERER_WEBGL) {
-        new_camera_dy = camera_dy - 60;
-        new_camera_dx = camera_dx - 45;
-        new_camera_dz = camera_dz - 45;
+        let new_camera_dy = camera_dy - 60;
+        let new_camera_dx = camera_dx - 45;
+        let new_camera_dz = camera_dz - 45;
         if (new_camera_dy < 350 || new_camera_dy > 1200) {
           return;
         } else {
@@ -1670,9 +1936,9 @@ civclient_handle_key(keyboard_key, key_code, ctrl, alt, shift, the_event)
     case 109:
       //zoom out
       if (renderer == RENDERER_WEBGL) {
-        new_camera_dy = camera_dy + 60;
-        new_camera_dx = camera_dx + 45;
-        new_camera_dz = camera_dz + 45;
+        let new_camera_dy = camera_dy + 60;
+        let new_camera_dx = camera_dx + 45;
+        let new_camera_dz = camera_dz + 45;
         if (new_camera_dy < 350 || new_camera_dy > 1200) {
           return;
         } else {
@@ -1789,6 +2055,10 @@ function handle_context_menu_callback(key)
 
     case "noorders":
       key_unit_noorders();
+      break;
+
+    case "idle":
+      key_unit_idle();
       break;
 
     case "upgrade":
@@ -1915,7 +2185,7 @@ function send_end_turn()
   if (is_longturn()) {
     show_dialog_message("Turn done!",
       "Your turn in this Freeciv-web: One Turn per Day game is now over. In this game one turn is played every day. " +
-      "To play your next turn in this game, go to play.freeciv.org and click <b>Games</b> in the menu, then <b>Multiplayer</b> " +
+      "To play your next turn in this game, go to " + window.location.host + " and click <b>Games</b> in the menu, then <b>Multiplayer</b> " +
       "and there you will find this Freeciv-web: One Turn per Day game in the list. You can also bookmark this page.<br>" +
       "See you again soon!"  );
   }
@@ -1948,7 +2218,7 @@ function key_unit_load()
 
     var has_transport_unit = false;
     var units_on_tile = tile_units(ptile);
-    for (r = 0; r < units_on_tile.length; r++) {
+    for (let r = 0; r < units_on_tile.length; r++) {
       var tunit = units_on_tile[r];
       if (tunit['id'] == punit['id']) continue;
       var ntype = unit_type(tunit);
@@ -2020,7 +2290,6 @@ function key_unit_show_cargo()
   }
   update_active_units_dialog();
   update_unit_order_commands();
-
 }
 
 /**************************************************************************
@@ -2050,6 +2319,18 @@ function key_unit_noorders()
   advance_unit_focus();
 }
 
+/**************************************************************************
+ Tell the units to stop what they are doing.
+**************************************************************************/
+function key_unit_idle()
+{
+  var funits = get_units_in_focus();
+  for (var i = 0; i < funits.length; i++) {
+    var punit = funits[i];
+    request_new_unit_activity(punit, ACTIVITY_IDLE, EXTRA_NONE);
+  }
+  setTimeout(update_unit_focus, 700);
+}
 
 /**************************************************************************
  Tell the units in focus to sentry.
@@ -2156,6 +2437,7 @@ function key_unit_upgrade()
       "pid"         : packet_unit_do_action,
       "actor_id"    : punit['id'],
       "target_id"   : target_id,
+      "extra_id"    : EXTRA_NONE,
       "value"       : 0,
       "name"        : "",
       "action_type" : ACTION_UPGRADE_UNIT
@@ -2223,7 +2505,14 @@ function key_unit_pillage()
   var funits = get_units_in_focus();
   for (var i = 0; i < funits.length; i++) {
     var punit = funits[i];
-    request_new_unit_activity(punit, ACTIVITY_PILLAGE, EXTRA_NONE);
+    var tgt = get_what_can_unit_pillage_from(punit, null);
+    if (tgt.length > 0) {
+      if (tgt.length == 1) {
+        request_new_unit_activity(punit, ACTIVITY_PILLAGE, EXTRA_NONE);
+      } else {
+        popup_pillage_selection_dialog(punit);
+      }
+    }
   }
   setTimeout(update_unit_focus, 700);
 }
@@ -2275,13 +2564,13 @@ function key_unit_homecity()
       var packet = {"pid" : packet_unit_do_action,
                     "actor_id" : punit['id'],
                     "target_id": pcity['id'],
+                    "extra_id" : EXTRA_NONE,
                     "value" : 0,
                     "name" : "",
                     "action_type": ACTION_HOME_CITY};
       send_request(JSON.stringify(packet));
       $("#order_change_homecity").hide();
     }
-
   }
 }
 
@@ -2368,11 +2657,34 @@ function key_unit_auto_settle()
 
 
 /**************************************************************************
+  Ask the server to cancel unit orders, if any.
+**************************************************************************/
+function request_unit_cancel_orders(punit)
+{
+  if (punit != null && (punit.ai || punit.has_orders)) {
+    punit.ai = false;
+    punit.has_orders = false;
+    var packet = {
+      pid: packet_unit_orders,
+      unit_id: punit.id,
+      src_tile: punit.tile,
+      length: 0,
+      repeat: false,
+      vigilant: false,
+      dest_tile: punit.tile
+    };
+    packet.orders = packet.dir = packet.activity = packet.target
+                  = packet.extra = packet.action = [];
+    send_request(JSON.stringify(packet));
+  }
+}
+
+/**************************************************************************
  ...
 **************************************************************************/
 function request_new_unit_activity(punit, activity, target)
 {
-
+  request_unit_cancel_orders(punit);
   var packet = {"pid" : packet_unit_change_activity, "unit_id" : punit['id'],
                 "activity" : activity, "target" : target };
   send_request(JSON.stringify(packet));
@@ -2386,6 +2698,7 @@ function request_new_unit_activity(punit, activity, target)
 function request_unit_autosettlers(punit)
 {
   if (punit != null ) {
+    request_unit_cancel_orders(punit);
     var packet = {"pid" : packet_unit_autosettlers, "unit_id" : punit['id']};
     send_request(JSON.stringify(packet));
   }
@@ -2422,6 +2735,7 @@ function request_unit_build_city()
           packet = {"pid" : packet_unit_do_action,
             "actor_id"    : punit['id'],
             "target_id"   : target_city['id'],
+            "extra_id"    : EXTRA_NONE,
             "value"       : 0,
             "name"        : "",
             "action_type" : ACTION_JOIN_CITY };
@@ -2463,6 +2777,7 @@ function(){
       "actor_id"    : punit['id'],
       "target_id"   : (target_city == null ? punit['id']
                                            : target_city['id']),
+      "extra_id"    : EXTRA_NONE,
       "value"       : 0,
       "name"        : "",
       "action_type" : (target_city == null ? ACTION_DISBAND_UNIT
@@ -2509,7 +2824,8 @@ function key_unit_move(dir)
       "orders"   : [ORDER_ACTION_MOVE],
       "dir"      : [dir],
       "activity" : [ACTIVITY_LAST],
-      "target"   : [EXTRA_NONE],
+      "target"   : [0],
+      "extra"    : [EXTRA_NONE],
       "action"   : [ACTION_COUNT],
       "dest_tile": newtile['index']
     };
@@ -2549,6 +2865,7 @@ function process_diplomat_arrival(pdiplomat, target_tile_id)
       "actor_unit_id" : pdiplomat['id'],
       "target_unit_id" : IDENTITY_NUMBER_ZERO,
       "target_tile_id": target_tile_id,
+      "target_extra_id": EXTRA_NONE,
       "disturb_player": true
     };
     send_request(JSON.stringify(packet));
@@ -2597,7 +2914,6 @@ function check_request_goto_path()
   }
   prev_mouse_x = mouse_x;
   prev_mouse_y = mouse_y;
-
 }
 
 /****************************************************************************
@@ -2652,7 +2968,6 @@ function center_tile_mapcanvas(ptile)
   } else {
     center_tile_mapcanvas_3d(ptile);
   }
-
 }
 
 /**************************************************************************
@@ -2671,7 +2986,6 @@ function popit()
   if (ptile == null) return;
 
   popit_req(ptile);
-
 }
 
 /**************************************************************************
@@ -2714,7 +3028,6 @@ function center_on_any_city()
     center_tile_mapcanvas(city_tile(pcity));
     return;
   }
-
 }
 
 /**************************************************************************
@@ -2826,7 +3139,6 @@ function set_mouse_touch_started_on_unit(ptile) {
   } else {
     mouse_touch_started_on_unit = false;
   }
-
 }
 
 
@@ -2851,5 +3163,4 @@ function check_mouse_drag_unit(ptile)
   if (ptile_units.length > 1) {
      update_active_units_dialog();
   }
-
 }

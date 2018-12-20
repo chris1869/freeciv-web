@@ -22,3 +22,44 @@ var extras = {};
 var EXTRA_NONE = -1;
 
 // see handle_ruleset_extra, where EXTRA_* variables are defines dynamically.
+
+/************************************************************************//**
+  Return extras type of given id.
+****************************************************************************/
+function extra_by_number(id)
+{
+  if (id == EXTRA_NONE) {
+    return null;
+  }
+
+  if (id >= 0 && id < MAX_EXTRA_TYPES) {
+    return extras[id];
+  } else {
+    console.log("extra_by_number(): Invalid extra id: " + id);
+    return null;
+  }
+}
+
+/************************************************************************//**
+  Who owns extras on tile
+****************************************************************************/
+function extra_owner(ptile)
+{
+  return player_by_number(ptile['extras_owner']);
+}
+
+/************************************************************************//**
+  Is given cause one of the causes for the given extra?
+****************************************************************************/
+function is_extra_caused_by(pextra, cause)
+{
+  return pextra.causes.isSet(cause);
+}
+
+/************************************************************************//**
+  Is given cause one of the removal causes for the given extra?
+****************************************************************************/
+function is_extra_removed_by(pextra, rmcause)
+{
+  return pextra.rmcauses.isSet(rmcause);
+}

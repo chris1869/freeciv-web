@@ -5,7 +5,6 @@
 <html lang="en">
 <head>
 	<%@include file="/WEB-INF/jsp/fragments/head.jsp"%>
-	<script type="text/javascript" src="https://s7.addthis.com/js/300/addthis_widget.js#pubid=ra-553240ed5ba009c1" async="async"></script>
     <link rel="stylesheet" href="/css/morris.css" />
     <script src="/javascript/libs/raphael-min.js"></script>
 	<script type="text/javascript" src="/javascript/libs/morris.min.js" ></script>
@@ -122,13 +121,13 @@
 						<c:choose>
 							<c:when test="${state == 'Pregame'}">
 								<div>
-									<a class="label label-success" href="/webclient/?action=multi&civserverport=${port}&amp;civserverhost=${host}">
+									<a class="label label-success" href="/webclient/?action=multi&civserverport=${port}&amp;civserverhost=${host}&amp;type=${type}">
 										Join</a> You can join this game now.
 								</div>
 							</c:when>
 							<c:otherwise>
 								<div>
-									<a class="label label-primary" href="/webclient/?action=multi&civserverport=${port}&amp;civserverhost=${host}">
+									<a class="label label-primary" href="/webclient/?action=multi&civserverport=${port}&amp;civserverhost=${host}&amp;type=${type}">
 										Join/Observe</a> You can observe this game now.
 								</div>
 							</c:otherwise>

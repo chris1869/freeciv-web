@@ -27,7 +27,9 @@ var CLAUSE_PEACE = 6;
 var CLAUSE_ALLIANCE = 7;
 var CLAUSE_VISION = 8;
 var CLAUSE_EMBASSY = 9;
+var SPECENUM_COUNT = 10;
 
+var clause_infos = {};
 var diplomacy_clause_map = {};
 
 /**************************************************************************
@@ -48,16 +50,7 @@ function show_diplomacy_dialog(counterpart)
 {
  if (cardboard_vr_enabled) return;
  var pplayer = players[counterpart];
- $.ajax({
-   url: "/webclient/diplomacy_meeting.hbs?ts=" + ts,
-   dataType: "html",
-   cache: true,
-   async: false
- }).fail(function() {
-   swal("Unable to load diplomacy meeting dialog template.");
- }).done(function( data ) {
-   create_diplomacy_dialog(pplayer, Handlebars.compile(data));
- });
+ create_diplomacy_dialog(pplayer, Handlebars.templates['diplomacy_meeting']);
 }
 
 /**************************************************************************
@@ -112,7 +105,6 @@ function accept_treaty(counterpart, I_accepted, other_accepted)
       $("#agree_counterpart_" + counterpart).html(disagree_html);
     }
   }
-
 }
 
 /**************************************************************************
@@ -197,7 +189,6 @@ function show_diplomacy_clauses(counterpart_id)
     }
 
     $("#diplomacy_messages_" + counterpart_id).html(diplo_html);
-
 }
 
 /**************************************************************************
@@ -242,12 +233,8 @@ function remove_clause(remove_clause_obj)
 **************************************************************************/
 function client_diplomacy_clause_string(counterpart, giver, type, value)
 {
-
-  var pplayer = null;
-  var nation = null;
-
-  pplayer = players[giver];
-  nation = nations[pplayer['nation']]['adjective'];
+  var pplayer = players[giver];
+  var nation = nations[pplayer['nation']]['adjective'];
 
   switch (type) {
   case CLAUSE_ADVANCE:
@@ -367,7 +354,7 @@ function create_diplomacy_dialog(counterpart, template) {
   create_clauses_menu($('#hierarchy_self_' + counterpart_id));
   create_clauses_menu($('#hierarchy_counterpart_' + counterpart_id));
 
-  if (game_info.trading_gold) {
+  if (game_info.trading_gold && clause_infos[CLAUSE_GOLD]['enabled']) {
     $("#self_gold_" + counterpart_id).attr({
        "max" : pplayer['gold'],
        "min" : 0
@@ -495,17 +482,22 @@ function meeting_template_data(giver, taker)
   var all_clauses = [];
 
   var clauses = [];
-  clauses.push({type: CLAUSE_MAP, value: 1, name: 'World-map'});
-  clauses.push({type: CLAUSE_SEAMAP, value: 1, name: 'Sea-map'});
-  all_clauses.push({title: 'Maps...', clauses: clauses});
+  if (clause_infos[CLAUSE_MAP]['enabled']) {
+    clauses.push({type: CLAUSE_MAP, value: 1, name: 'World-map'});
+  }
+  if (clause_infos[CLAUSE_SEAMAP]['enabled']) {
+    clauses.push({type: CLAUSE_SEAMAP, value: 1, name: 'Sea-map'});
+  }
+  if (clauses.length > 0) {
+    all_clauses.push({title: 'Maps...', clauses: clauses});
+  }
 
-  if (game_info.trading_tech) {
+  if (game_info.trading_tech && clause_infos[CLAUSE_ADVANCE]['enabled']) {
     clauses = [];
     for (var tech_id in techs) {
       if (player_invention_state(giver, tech_id) == TECH_KNOWN
           && (player_invention_state(taker, tech_id) == TECH_UNKNOWN
               || player_invention_state(taker, tech_id) == TECH_PREREQS_KNOWN)) {
-        var ptech = techs[tech_id];
         clauses.push({
           type: CLAUSE_ADVANCE,
           value: tech_id,
@@ -518,7 +510,8 @@ function meeting_template_data(giver, taker)
     }
   }
 
-  if (game_info.trading_city && !is_longturn()) {
+  if (game_info.trading_city && !is_longturn()
+      && clause_infos[CLAUSE_CITY]['enabled']) {
     clauses = [];
     for (var city_id in cities) {
       var pcity = cities[city_id];
@@ -536,18 +529,27 @@ function meeting_template_data(giver, taker)
     }
   }
 
-  all_clauses.push({type: CLAUSE_VISION, value: 1, name: 'Give shared vision'});
-  all_clauses.push({type: CLAUSE_EMBASSY, value: 1, name: 'Give embassy'});
+  if (clause_infos[CLAUSE_VISION]['enabled']) {
+    all_clauses.push({type: CLAUSE_VISION, value: 1, name: 'Give shared vision'});
+  }
+  if (clause_infos[CLAUSE_EMBASSY]['enabled']) {
+    all_clauses.push({type: CLAUSE_EMBASSY, value: 1, name: 'Give embassy'});
+  }
 
   if (giver == client.conn.playing) {
-    all_clauses.push({
-      title: 'Pacts...',
-      clauses: [
-        {type: CLAUSE_CEASEFIRE, value: 1, name: 'Cease-fire'},
-        {type: CLAUSE_PEACE, value: 1, name: 'Peace'},
-        {type: CLAUSE_ALLIANCE, value: 1, name: 'Alliance'}
-      ]
-    });
+    clauses = [];
+    if (clause_infos[CLAUSE_CEASEFIRE]['enabled']) {
+      clauses.push({type: CLAUSE_CEASEFIRE, value: 1, name: 'Cease-fire'});
+    }
+    if (clause_infos[CLAUSE_PEACE]['enabled']) {
+      clauses.push({type: CLAUSE_PEACE, value: 1, name: 'Peace'});
+    }
+    if (clause_infos[CLAUSE_ALLIANCE]['enabled']) {
+      clauses.push({type: CLAUSE_ALLIANCE, value: 1, name: 'Alliance'});
+    }
+    if (clauses.length > 0) {
+      all_clauses.push({ title: 'Pacts...', clauses: clauses });
+    }
   }
 
   data.clauses = all_clauses;

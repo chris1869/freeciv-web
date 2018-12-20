@@ -59,6 +59,7 @@ function init_overview()
   $("#game_overview_panel").dialog({
 			bgiframe: true,
 			modal: false,
+			appendTo: '#tabs-map',
 			resizable: false,
 			closeOnEscape: false,
 			dialogClass: 'overview_dialog no-close',
@@ -85,7 +86,7 @@ function init_overview()
                       if (new_height > max_overview_height) new_height = max_overview_height;
                       $('#overview_map').width(new_width);
                       $('#overview_map').height(new_height);
-                      $(".overview_dialog").position({my: 'left bottom', at: 'left bottom', of: window, within: $("#game_page")});
+                      $(".overview_dialog").position({my: 'left bottom', at: 'left bottom', of: window, within: $("#tabs-map")});
                     },
                   "icons" : {
                     "minimize" : "ui-icon-circle-minus",
@@ -106,7 +107,7 @@ function init_overview()
   if (new_height > max_overview_height) new_height = max_overview_height;
   $('#overview_map').width(new_width);
   $('#overview_map').height(new_height);
-  $(".overview_dialog").position({my: 'left bottom', at: 'left bottom', of: window, within: $("#game_page")});
+  $(".overview_dialog").position({my: 'left bottom', at: 'left bottom', of: window, within: $("#tabs-map")});
 
   $('#overview_map').on('dragstart', function(event) { event.preventDefault(); });
 }
@@ -123,12 +124,12 @@ function redraw_overview()
   var hash = generate_overview_hash(map['xsize'], map['ysize'])
 
   if (hash != overview_hash) {
-    bmp_lib.render('overview_map',
+    bmp_lib.render('overview_img',
                     generate_overview_grid(map['xsize'], map['ysize']),
                     palette);
     overview_hash = hash;
+    render_viewrect();
   }
-
 }
 
 
@@ -137,7 +138,7 @@ function redraw_overview()
 ****************************************************************************/
 function generate_overview_grid(cols, rows) {
   // Loop variables
-  var row, col;
+  var row;
 
   if (cols & 1) cols -= 1;  //Bugfix, the overview map doesn't support map size which is odd.
   if (rows & 1) rows -= 1;
@@ -155,8 +156,6 @@ function generate_overview_grid(cols, rows) {
     }
   }
 
-  //render_viewrect(grid);  TODO: This has been disabled temporarily, since it looks ugly on the game replay.
-
   return grid;
 }
 
@@ -166,7 +165,6 @@ function generate_overview_grid(cols, rows) {
 function generate_overview_hash(cols, rows) {
 
   var hash = 0;
-  var row, col;
 
   for (var x = 0; x < rows ; x++) {
     for (var y = 0; y < cols; y++) {
@@ -193,56 +191,97 @@ function generate_overview_hash(cols, rows) {
 /****************************************************************************
   ...
 ****************************************************************************/
-function render_viewrect(grid)
+function render_viewrect()
 {
-  var r;
-
   if (C_S_RUNNING != client_state() && C_S_OVER != client_state()) return;
+
+  var path = [];
 
   if (renderer == RENDERER_2DCANVAS && mapview['gui_x0'] != 0 && mapview['gui_y0'] != 0) {
 
-    var r = base_canvas_to_map_pos(0, 0);
-    var s = base_canvas_to_map_pos(mapview['width'], 0);
-    var t = base_canvas_to_map_pos(0, mapview['height']);
-    var u = base_canvas_to_map_pos(mapview['width'], mapview['height']);
-
-    drawLine(grid, r['map_y'], r['map_x'], s['map_y'], s['map_x']);
-    drawLine(grid, s['map_y'], s['map_x'], u['map_y'], u['map_x']);
-    drawLine(grid, t['map_y'], t['map_x'], u['map_y'], u['map_x']);
-    drawLine(grid, r['map_y'], r['map_x'], t['map_y'], t['map_x']);
+    var point = base_canvas_to_map_pos(0, 0);
+    path.push([point.map_x, point.map_y]);
+    point = base_canvas_to_map_pos(mapview['width'], 0);
+    path.push([point.map_x, point.map_y]);
+    point = base_canvas_to_map_pos(mapview['width'], mapview['height']);
+    path.push([point.map_x, point.map_y]);
+    point = base_canvas_to_map_pos(0, mapview['height']);
+    path.push([point.map_x, point.map_y]);
 
   } else {
-    var ptile1 = webgl_canvas_pos_to_tile($(window).width() / 6, $(window).height() / 6);
-    var ptile2 = webgl_canvas_pos_to_tile($(window).width() - $(window).width() / 6, $(window).height() / 6);
-    var ptile3 = webgl_canvas_pos_to_tile($(window).width() / 6, $(window).height() - height_offset);
-    var ptile4 = webgl_canvas_pos_to_tile($(window).width() - $(window).width() / 6, $(window).height() - height_offset);
 
-    if (ptile1 == null || ptile2 == null || ptile3 == null || ptile4 == null) return;
+    var w = $(window).width();
+    var h = $(window).height();
 
-    drawLine(grid, ptile1['y'], ptile1['x'], ptile2['y'], ptile2['x']);
-    drawLine(grid, ptile2['y'], ptile2['x'], ptile4['y'], ptile4['x']);
-    drawLine(grid, ptile3['y'], ptile3['x'], ptile4['y'], ptile4['x']);
-    drawLine(grid, ptile1['y'], ptile1['x'], ptile3['y'], ptile3['x']);
+    var ptile = webgl_canvas_pos_to_tile(w / 6, h / 6);
+    if (ptile == null) return;
+    path.push([ptile.x, ptile.y]);
+    var ptile = webgl_canvas_pos_to_tile(5 * w / 6, h / 6);
+    if (ptile == null) return;
+    path.push([ptile.x, ptile.y]);
+    var ptile = webgl_canvas_pos_to_tile(5 * w / 6, h - height_offset);
+    if (ptile == null) return;
+    path.push([ptile.x, ptile.y]);
+    var ptile = webgl_canvas_pos_to_tile(w / 6, h - height_offset);
+    if (ptile == null) return;
+    path.push([ptile.x, ptile.y]);
 
   }
+
+  var viewrect_canvas = document.getElementById('overview_viewrect');
+  if (viewrect_canvas == null) return;
+
+  var map_w = $('#overview_map').width();
+  var map_h = $('#overview_map').height();
+  viewrect_canvas.width = map_w;
+  viewrect_canvas.height = map_h;
+
+  var viewrect_ctx = viewrect_canvas.getContext("2d");
+
+  viewrect_ctx.clearRect(0, 0, map_w, map_h);
+  viewrect_ctx.strokeStyle = 'rgb(200,200,255)';
+  viewrect_ctx.lineWidth = map.xsize / map_w;
+  viewrect_ctx.scale(map_w/map.xsize, map_h/map.ysize);
+
+  viewrect_ctx.beginPath();
+  add_closed_path(viewrect_ctx, path);
+
+  if (topo_has_flag(TF_WRAPX)) {
+    viewrect_ctx.save();
+    viewrect_ctx.translate(map.xsize, 0);
+    add_closed_path(viewrect_ctx, path);
+    viewrect_ctx.translate(-2 * map.xsize, 0);
+    add_closed_path(viewrect_ctx, path);
+    viewrect_ctx.restore();
+  }
+
+  if (topo_has_flag(TF_WRAPY)) {
+    viewrect_ctx.translate(0, map.ysize);
+    add_closed_path(viewrect_ctx, path);
+    viewrect_ctx.translate(0, -2 * map.ysize);
+    add_closed_path(viewrect_ctx, path);
+    if (topo_has_flag(TF_WRAPX)) {
+      viewrect_ctx.translate(-map.xsize, 0);
+      add_closed_path(viewrect_ctx, path);
+      viewrect_ctx.translate(0, 2 * map.ysize);
+      add_closed_path(viewrect_ctx, path);
+      viewrect_ctx.translate(2 * map.xsize, 0);
+      add_closed_path(viewrect_ctx, path);
+      viewrect_ctx.translate(0, -2 * map.ysize);
+      add_closed_path(viewrect_ctx, path);
+    }
+  }
+
+  viewrect_ctx.stroke();
 }
 
-/****************************************************************************
-  ...
-****************************************************************************/
-function drawLine(grid, Sx, Sy, Rx, Ry)
+function add_closed_path(ctx, path)
 {
-  var Ax = Sx * OVERVIEW_TILE_SIZE;
-  var Ay = Sy * OVERVIEW_TILE_SIZE;
-  var Bx = Rx * OVERVIEW_TILE_SIZE;
-  var By = Ry * OVERVIEW_TILE_SIZE;
-
-  var lineLength = Math.sqrt( (Ax-Bx)*(Ax-Bx)+(Ay-By)*(Ay-By));
-  for( var i=0; i<lineLength; i++ ) {
-    var x = Math.round( Ax+(Bx-Ax)*i/lineLength);
-    var y = Math.round( Ay+(By-Ay)*i/lineLength);
-    render_singlepixel(grid, x, y, COLOR_OVERVIEW_VIEWRECT);
+  ctx.moveTo(path[0][0], path[0][1]);
+  for (var i = 1; i < path.length; i++) {
+    ctx.lineTo(path[i][0], path[i][1]);
   }
+  ctx.lineTo(path[0][0], path[0][1]);
 }
 
 /****************************************************************************
@@ -256,18 +295,6 @@ function render_multipixel(grid, x, y, ocolor)
           grid[(OVERVIEW_TILE_SIZE*x)+px][(OVERVIEW_TILE_SIZE*y)+py] = ocolor;
       }
     }
-  }
-}
-
-/****************************************************************************
-  ...
-****************************************************************************/
-function render_singlepixel(grid, x, y, ocolor)
-{
-  if (x >= 0 && y >= 0 && x < (map['ysize'] * OVERVIEW_TILE_SIZE)
-      && y < (map['xsize'] * OVERVIEW_TILE_SIZE)
-      && grid[x] != null) {
-    grid[x][y] = ocolor;
   }
 }
 

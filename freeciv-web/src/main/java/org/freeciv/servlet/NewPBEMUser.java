@@ -40,6 +40,8 @@ import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.message.BasicNameValuePair;
 import javax.naming.*;
 
+import org.freeciv.services.Validation;
+
 
 /**
  * Creates a new play by email user account.
@@ -50,6 +52,8 @@ public class NewPBEMUser extends HttpServlet {
 
 	private static final int ACTIVATED = 1;
 	private static final long serialVersionUID = 1L;
+
+	private final Validation validation = new Validation();
 	private String captchaSecret;
 
 	public void init(ServletConfig config) throws ServletException {
@@ -82,7 +86,7 @@ public class NewPBEMUser extends HttpServlet {
 					"Invalid password. Please try again with another password.");
 			return;
 		}
-		if (username == null || username.length() <= 2) {
+		if (!validation.isValidUsername(username)) {
 			response.sendError(HttpServletResponse.SC_BAD_REQUEST,
 					"Invalid username. Please try again with another username.");
 			return;
@@ -92,18 +96,18 @@ public class NewPBEMUser extends HttpServlet {
 					"Invalid e-mail address. Please try again with another username.");
 			return;
 		}
-		HttpClient client = HttpClientBuilder.create().build();
-		String captchaUrl = "https://www.google.com/recaptcha/api/siteverify";
-		HttpPost post = new HttpPost(captchaUrl);
 
-		List<NameValuePair> urlParameters = new ArrayList<>();
-		urlParameters.add(new BasicNameValuePair("secret", captchaSecret));
-		urlParameters.add(new BasicNameValuePair("response", captcha));
-		post.setEntity(new UrlEncodedFormEntity(urlParameters));
+		/* Validate captcha against google api if a key is defined */
+		if (captchaSecret != null && captchaSecret.length() > 0) {
+			HttpClient client = HttpClientBuilder.create().build();
+			String captchaUrl = "https://www.google.com/recaptcha/api/siteverify";
+			HttpPost post = new HttpPost(captchaUrl);
 
-		if (!captchaSecret.contains("secret goes here")) {
-			/* Validate captcha against google api. skip validation for localhost 
-             where captcha_secret still has default value. */
+			List<NameValuePair> urlParameters = new ArrayList<>();
+			urlParameters.add(new BasicNameValuePair("secret", captchaSecret));
+			urlParameters.add(new BasicNameValuePair("response", captcha));
+			post.setEntity(new UrlEncodedFormEntity(urlParameters));
+
 			HttpResponse captchaResponse = client.execute(post);
 			InputStream in = captchaResponse.getEntity().getContent();
 			String body = IOUtils.toString(in, "UTF-8");

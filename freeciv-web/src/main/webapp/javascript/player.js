@@ -247,3 +247,48 @@ function player_has_wonder(playerno, improvement_id)
   }
   return false;
 }
+
+/**************************************************************************
+  Checks if a username is valid.
+  Returns a textual reason for invalid names, null for valid ones.
+**************************************************************************/
+function get_invalid_username_reason(username)
+{
+  if (username == null || username.length == 0) {
+    return "empty";
+  } else if (username.length <= 2) {
+    return "too short";
+  } else if (username.length >= 32) {
+    return "too long";
+  }
+  username = username.toLowerCase();
+  if (username == "pbem") {
+    return "not available";
+  } else if (username.search(/^[a-z][a-z0-9]*$/g) != 0) {
+    return "invalid: only English letters and numbers are allowed, and must start with a letter";
+  } else if (!check_text_with_banlist_exact(username)) {
+    return "banned";
+  }
+  return null;
+}
+
+/**************************************************************************
+ returns the the player's capital city, or undefined
+ **************************************************************************/
+function player_capital(player)
+{
+  for (const city_id in cities) {
+    const city = cities[city_id];
+    if (does_player_own_city(player, city) && is_capital(city)) {
+      return city;
+    }
+  }
+}
+
+/**************************************************************************
+ returns true if the specified player owns the specified city
+ **************************************************************************/
+function does_player_own_city(player, city)
+{
+  return city_owner_player_id(city) === player.playerno;
+}

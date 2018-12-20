@@ -45,6 +45,10 @@ public class ResetPassword extends HttpServlet {
     private String captchaSecret;
     private String emailUsername;
     private String emailPassword;
+    private String emailHost;
+    private String emailPort;
+    private String emailSender;
+    private String fcwHost;
 
     public void init(ServletConfig config) throws ServletException {
         super.init(config);
@@ -55,6 +59,10 @@ public class ResetPassword extends HttpServlet {
             captchaSecret = prop.getProperty("captcha_secret");
             emailUsername = prop.getProperty("email_username");
             emailPassword = prop.getProperty("email_password");
+            emailHost = prop.getProperty("email_host");
+            emailPort = prop.getProperty("email_port");
+            emailSender = prop.getProperty("email_sender");
+            fcwHost = prop.getProperty("fcw_host");
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -74,18 +82,17 @@ public class ResetPassword extends HttpServlet {
             return;
         }
 
-        HttpClient client = HttpClientBuilder.create().build();
-        String captchaUrl = "https://www.google.com/recaptcha/api/siteverify";
-        HttpPost post = new HttpPost(captchaUrl);
+        /* Validate captcha against google api if a key is defined */
+        if (captchaSecret != null && captchaSecret.length() > 0) {
+            HttpClient client = HttpClientBuilder.create().build();
+            String captchaUrl = "https://www.google.com/recaptcha/api/siteverify";
+            HttpPost post = new HttpPost(captchaUrl);
 
-        List<NameValuePair> urlParameters = new ArrayList<>();
-        urlParameters.add(new BasicNameValuePair("secret", captchaSecret));
-        urlParameters.add(new BasicNameValuePair("response", captcha));
-        post.setEntity(new UrlEncodedFormEntity(urlParameters));
+            List<NameValuePair> urlParameters = new ArrayList<>();
+            urlParameters.add(new BasicNameValuePair("secret", captchaSecret));
+            urlParameters.add(new BasicNameValuePair("response", captcha));
+            post.setEntity(new UrlEncodedFormEntity(urlParameters));
 
-        if (!captchaSecret.contains("secret goes here")) {
-			/* Validate captcha against google api. skip validation for localhost
-             where captcha_secret still has default value. */
             HttpResponse captchaResponse = client.execute(post);
             InputStream in = captchaResponse.getEntity().getContent();
             String body = IOUtils.toString(in, "UTF-8");
@@ -152,13 +159,22 @@ public class ResetPassword extends HttpServlet {
         try {
             if (emailPassword.equals("password")) return;
             Email email = new SimpleEmail();
-            email.setHostName("smtp.mailgun.org");
-            email.setSmtpPort(587);
-            email.setAuthenticator(new DefaultAuthenticator(emailUsername, emailPassword));
-            email.setSSLOnConnect(true);
-            email.setFrom("Freeciv-web <postmaster@freecivweb.info>");
+            email.setHostName(emailHost == null || emailHost.length() == 0 ? "localhost" : emailHost);
+            boolean emailAuth = emailUsername != null && emailUsername.length() > 0;
+            int port;
+            if (emailPort == null || emailPort.length() == 0) {
+                port = emailAuth ? 587 : 25;
+            } else {
+                port = Integer.parseInt(emailPort);
+            }
+            email.setSmtpPort(port);
+            if (emailAuth) {
+                email.setAuthenticator(new DefaultAuthenticator(emailUsername, emailPassword));
+                email.setSSLOnConnect(true);
+            }
+            email.setFrom(emailSender);
             email.setSubject("New password for Freeciv-web");
-            email.setMsg("Your new password for play.freeciv.org has been generated. \n\nUsername: " + username + " \nPassword: " + randomPassword);
+            email.setMsg("Your new password for " + fcwHost + " has been generated. \n\nUsername: " + username + " \nPassword: " + randomPassword);
             email.addTo(email_parameter);
             email.send();
         } catch (EmailException err) {
