@@ -11,7 +11,10 @@
 
 
 	<properties>
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<timestamp>${maven.build.timestamp}</timestamp>
+		<derived-webapp.dir>${basedir}/src/derived/webapp</derived-webapp.dir>
+		<generated-js.dir>${project.build.directory}/generated-sources/javascript</generated-js.dir>
 	</properties>
 
 	<repositories>
@@ -63,7 +66,7 @@
 		<dependency>
 			<groupId>mysql</groupId>
 			<artifactId>mysql-connector-java</artifactId>
-			<version>6.0.6</version>
+			<version>5.1.39</version>
 		</dependency>
 
 		<dependency>
@@ -122,6 +125,36 @@
 		<!-- <pluginManagement> -->
 			<plugins>
 				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-enforcer-plugin</artifactId>
+					<version>3.0.0-M2</version>
+					<executions>
+						<execution>
+							<id>enforce-files-exist</id>
+							<goals>
+								<goal>enforce</goal>
+							</goals>
+							<configuration>
+								<rules>
+									<requireFilesExist>
+										<files>
+											<file>${derived-webapp.dir}</file>
+										</files>
+										<message>
+Files derived from the original freeciv project not found as expected.
+
+Rerun the sync-js-hand.js script.
+
+										</message>
+									</requireFilesExist>
+								</rules>
+								<fail>true</fail>
+							</configuration>
+						</execution>
+					</executions>
+				</plugin>
+
+				<plugin>
 					<groupId>org.flywaydb</groupId>
 					<artifactId>flyway-maven-plugin</artifactId>
 					<version>4.0.3</version>
@@ -133,7 +166,6 @@
 					<configuration>
 						<source>1.7</source>
 						<target>1.7</target>
-						<encoding>UTF-8</encoding>
 					</configuration>
 				</plugin>
 
@@ -180,6 +212,89 @@
 				</plugin>
 
 				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-resources-plugin</artifactId>
+					<version>2.6</version>
+					<executions>
+						<execution>
+							<id>copy-generated-webapp-resources</id>
+							<phase>generate-sources</phase>
+							<goals>
+								<goal>copy-resources</goal>
+							</goals>
+							<configuration>
+								<outputDirectory>${project.build.directory}/${project.build.finalName}</outputDirectory>
+								<resources>
+									<resource>
+										<directory>${derived-webapp.dir}</directory>
+										<excludes>
+											<exclude>.gitignore</exclude>
+											<exclude>README.md</exclude>
+											<exclude>javascript/*.js</exclude>
+											<!-- NOT excluding `javascript/2dcavas/*` -->
+										</excludes>
+									</resource>
+								</resources>
+							</configuration>
+						</execution>
+					</executions>
+				</plugin>
+
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-antrun-plugin</artifactId>
+					<version>1.8</version>
+					<executions>
+						<execution>
+							<!-- workaround for https://github.com/samaxes/minify-maven-plugin/issues/142 -->
+							<id>source-mapping-fix</id>
+							<phase>initialize</phase>
+							<goals>
+								<goal>run</goal>
+							</goals>
+							<configuration>
+								<target>
+									<delete quiet="true">
+										<fileset dir="${project.build.directory}/freeciv-web/javascript" includes="**/*.map"/>
+									</delete>
+								</target>
+							</configuration>
+						</execution>
+						<execution>
+							<id>create-generated-javascript-dir</id>
+							<phase>generate-sources</phase>
+							<goals>
+								<goal>run</goal>
+							</goals>
+							<configuration>
+								<target>
+									<mkdir dir="${generated-js.dir}"/>
+								</target>
+							</configuration>
+						</execution>
+					</executions>
+				</plugin>
+
+				<plugin>
+					<groupId>org.codehaus.mojo</groupId>
+					<artifactId>exec-maven-plugin</artifactId>
+					<version>1.6.0</version>
+					<executions>
+						<execution>
+							<id>Precompile Handlebars templates</id>
+							<phase>generate-sources</phase>
+							<goals>
+								<goal>exec</goal>
+							</goals>
+							<configuration>
+								<executable>handlebars</executable>
+								<commandlineArgs>src/main/webapp/webclient -e hbs -f ${generated-js.dir}/hbs-templates.js --knownOnly</commandlineArgs>
+							</configuration>
+						</execution>
+					</executions>
+				</plugin>
+
+				<plugin>
 					<groupId>com.samaxes.maven</groupId>
 					<artifactId>minify-maven-plugin</artifactId>
 					<version>1.7.6</version>
@@ -187,9 +302,14 @@
 						<dependency>
 							<groupId>com.google.javascript</groupId>
 							<artifactId>closure-compiler</artifactId>
-							<version>v20170521</version>
+							<version>v20180716</version>
 						</dependency>
 					</dependencies>
+					<configuration>
+						<jsEngine>CLOSURE</jsEngine>
+						<closureLanguageIn>ECMASCRIPT_2017</closureLanguageIn>
+						<closureCreateSourceMap>true</closureCreateSourceMap>
+					</configuration>
 					<executions>
 						<!-- Create minified common webclient.min.js and css -->
 						<execution>
@@ -212,7 +332,19 @@
 								<jsSourceDir>javascript</jsSourceDir>
 								<jsFinalFile>webclient.js</jsFinalFile>
 								<jsSourceFiles>
+									<!-- order is important: these must be before sources below -->
 									<jsSourceFile>libs/EventAggregator.js</jsSourceFile>
+									<jsSourceFile>libs/handlebars.runtime-v4.0.11.js</jsSourceFile>
+									<!-- these must be listed here, jsSourceIncludes doesn't work -->
+									<jsSourceFile>../../../derived/webapp/javascript/fc_events.js</jsSourceFile>
+									<jsSourceFile>../../../derived/webapp/javascript/freeciv-helpdata.js</jsSourceFile>
+									<jsSourceFile>../../../derived/webapp/javascript/packets.js</jsSourceFile>
+									<jsSourceFile>../../../derived/webapp/javascript/packhand_gen.js</jsSourceFile>
+									<jsSourceFile>../../../derived/webapp/javascript/soundset_spec.js</jsSourceFile>
+									<jsSourceFile>../../../derived/webapp/javascript/2dcanvas/tileset_spec_amplio2.js</jsSourceFile>
+									<jsSourceFile>../../../derived/webapp/javascript/2dcanvas/tileset_spec_isotrident.js</jsSourceFile>
+									<jsSourceFile>../../../derived/webapp/javascript/2dcanvas/tileset_spec_trident.js</jsSourceFile>
+									<jsSourceFile>../../../../target/generated-sources/javascript/hbs-templates.js</jsSourceFile>
 								</jsSourceFiles>
 								<jsSourceIncludes>
 									<jsSourceInclude>*.js</jsSourceInclude>
@@ -223,15 +355,11 @@
 								<jsSourceExcludes>
 									<jsSourceExclude>frontpage.js</jsSourceExclude>
 									<jsSourceExclude>libs/jquery.min.js</jsSourceExclude>
-									<jsSourceExclude>libs/bootstrap.min.js</jsSourceExclude>
 									<jsSourceExclude>libs/hammer.min.js</jsSourceExclude>
 									<jsSourceExclude>tileset_config*</jsSourceExclude>
 									<jsSourceExclude>tileset_spec*</jsSourceExclude>
 									<jsSourceExclude>libs/gif.worker.js</jsSourceExclude>
 								</jsSourceExcludes>
-								<jsEngine>CLOSURE</jsEngine>
-								<closureCreateSourceMap>true</closureCreateSourceMap>
-								<closureLanguage>ECMASCRIPT5</closureLanguage>
 							</configuration>
 							<goals>
 								<goal>minify</goal>
@@ -243,7 +371,6 @@
 							<configuration>
 								<jsSourceDir>javascript/webgl/libs/</jsSourceDir>
 								<jsFinalFile>webgl-client.js</jsFinalFile>
-								<closureLanguage>ECMASCRIPT5</closureLanguage>
 								<jsSourceIncludes>
 									<jsSourceInclude>*.js</jsSourceInclude>
 								</jsSourceIncludes>
@@ -251,8 +378,6 @@
 									<jsSourceExclude>three.min.js</jsSourceExclude>
 									<jsSourceExclude>StereoEffect.js</jsSourceExclude>
 								</jsSourceExcludes>
-								<jsEngine>CLOSURE</jsEngine>
-								<closureCreateSourceMap>true</closureCreateSourceMap>
 							</configuration>
 							<goals>
 								<goal>minify</goal>
@@ -264,37 +389,32 @@
 							<configuration>
 								<jsSourceDir>static/javascript</jsSourceDir>
 								<jsFinalFile>index.js</jsFinalFile>
-								<closureLanguage>ECMASCRIPT5</closureLanguage>
 								<jsSourceIncludes>
 									<jsSourceInclude>index.js</jsSourceInclude>
 								</jsSourceIncludes>
-								<jsEngine>CLOSURE</jsEngine>
 								<closureCreateSourceMap>false</closureCreateSourceMap>
 							</configuration>
 							<goals>
 								<goal>minify</goal>
 							</goals>
-						</execution>	
+						</execution>
 
 						<execution>
 							<id>header-minify</id>
 							<configuration>
 								<jsSourceDir>static/javascript</jsSourceDir>
 								<jsFinalFile>header.js</jsFinalFile>
-								<closureLanguage>ECMASCRIPT5</closureLanguage>
 								<jsSourceIncludes>
 									<jsSourceInclude>header.js</jsSourceInclude>
 								</jsSourceIncludes>
-								<jsEngine>CLOSURE</jsEngine>
 								<closureCreateSourceMap>false</closureCreateSourceMap>
 							</configuration>
 							<goals>
 								<goal>minify</goal>
 							</goals>
-						</execution>							
+						</execution>
 					</executions>
 				</plugin>
-
 
 				<plugin>
 					<groupId>com.cj.jshintmojo</groupId>
@@ -319,9 +439,8 @@
 						<excludes>
 							<exclude>src/main/webapp/javascript/libs/bigscreen.min.js</exclude>
 							<exclude>src/main/webapp/javascript/libs/bmp_lib.js</exclude>
-							<exclude>src/main/webapp/javascript/libs/bootstrap.min.js</exclude>
 							<exclude>src/main/webapp/javascript/libs/fg.menu.js</exclude>
-							<exclude>src/main/webapp/javascript/libs/handlebars-v4.0.5.js</exclude>
+							<exclude>src/main/webapp/javascript/libs/handlebars.runtime-v4.0.11.js</exclude>
 							<exclude>src/main/webapp/javascript/libs/jquery.blockUI.js</exclude>
 							<exclude>src/main/webapp/javascript/libs/jquery.contextMenu.js</exclude>
 							<exclude>src/main/webapp/javascript/libs/jquery.min.js</exclude>

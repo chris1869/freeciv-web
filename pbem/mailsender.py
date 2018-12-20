@@ -16,7 +16,6 @@
 
 ***********************************************************************'''
 import smtplib
-import json
 import configparser
 import re
 import time
@@ -29,11 +28,20 @@ class MailSender():
   settings.read("settings.ini")
   testmode = False;
 
-  smtp_login=settings.get("Config", "smtp_login")
-  smtp_password=settings.get("Config", "smtp_password")
-  smtp_host=settings.get("Config", "smtp_host")
-  smtp_port=settings.get("Config", "smtp_port")
-  smtp_sender=settings.get("Config", "smtp_sender")
+  smtp_login = settings.get("Config", "smtp_login", fallback="")
+  smtp_auth = (len(smtp_login) > 0)
+  smtp_password = settings.get("Config", "smtp_password", fallback="")
+  smtp_host = settings.get("Config", "smtp_host", fallback="").strip()
+  if len(smtp_host) == 0:
+    smtp_host = "localhost"
+  smtp_port = settings.get("Config", "smtp_port", fallback="")
+  if smtp_port.isnumeric():
+    smtp_port = int(stmp_port)
+  else:
+    smtp_port = 587 if smtp_auth else 25
+  smtp_sender = settings.get("Config", "smtp_sender")
+
+  host = settings.get("Config", "host")
 
   template_next_turn = "";
   with open('email_template_next_turn.html', 'r') as content_file:
@@ -49,8 +57,9 @@ class MailSender():
   def send_message_via_smtp(self, from_, to, mime_string):
     time.sleep(2);
     if not self.testmode:
-      smtp = smtplib.SMTP(self.smtp_host, int(self.smtp_port))
-      smtp.login(self.smtp_login, self.smtp_password);
+      smtp = smtplib.SMTP(self.smtp_host, self.smtp_port)
+      if self.smtp_auth:
+        smtp.login(self.smtp_login, self.smtp_password);
       smtp.sendmail(from_, to, mime_string)
       smtp.quit()
     else:
@@ -76,6 +85,7 @@ class MailSender():
     for p in players:
        plrs_txt += p + ", ";
     msg = msg.replace("{players}", plrs_txt);
+    msg = msg.replace("{host}", self.host);
 
     self.send_mailgun_message(email_address, "Freeciv-Web: It's your turn to play! Turn: " \
         + str(turn), msg);
@@ -84,6 +94,7 @@ class MailSender():
     sender = re.sub(r'\W+', '', invitation_from);
     msg = self.template_invitation;
     msg = msg.replace("{sender}", sender);
+    msg = msg.replace("{host}", self.host);
 
     self.send_mailgun_message(invitation_to, "Freeciv-Web: Join my game!" , msg);
 
@@ -95,12 +106,14 @@ class MailSender():
     msg_winner += "Winner score: " + winner_score + "<br>"
     msg_winner += "Loser score: " + losers_score + "<br>"
     msg = self.template_generic.replace("{message}", msg_winner);
+    msg = msg.replace("{host}", self.host);
     self.send_mailgun_message(winner_email, "Freeciv-Web: You won!", msg);
 
     msg_loser = "To " + losers + "<br>You have lost the game of Freeciv-web against " + winner + ".<br>";
     msg_loser += "Winner score: " + winner_score + "<br>"
     msg_loser += "Loser score: " + losers_score + "<br>"
     msg = self.template_generic.replace("{message}", msg_loser);
+    msg = msg.replace("{host}", self.host);
     self.send_mailgun_message(losers_email, "Freeciv-Web: You lost!", msg);
 
   # send email with reminder that game is about to expire
@@ -110,5 +123,6 @@ class MailSender():
     msg += "<a href='" + game_url + "'>Click here to play your turn now</a> <br><br>";
     msg += "Your game will expire in 24 hours.<br>"
     msg = self.template_generic.replace("{message}", msg);
+    msg = msg.replace("{host}", self.host);
     self.send_mailgun_message(email, "Freeciv-Web: Remember to play your turn!", msg);
 

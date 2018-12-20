@@ -2,13 +2,17 @@
 -----------------------
 
 [![Build Status](https://api.travis-ci.org/freeciv/freeciv-web.png)](https://travis-ci.org/freeciv/freeciv-web)
+[![Code Quality: Javascript](https://img.shields.io/lgtm/grade/javascript/g/freeciv/freeciv-web.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/freeciv/freeciv-web/context:javascript)
+[![Total Alerts](https://img.shields.io/lgtm/alerts/g/freeciv/freeciv-web.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/freeciv/freeciv-web/alerts)
 
 Freeciv-web is an open-source turn-based strategy game. It can be played in any HTML5 capable web-browser and features in-depth game-play and a wide variety of game modes and options. Your goal is to build cities, collect resources, organize your government, and build an army, with the ultimate goal of creating the best civilization. You can play online against other players (multiplayer) or play by yourself against the computer. There is both a HTML5 2D version with isometric graphics and a 3D WebGL version of Freeciv-web. 
 
 Freeciv-web is free and open source software. The Freeciv C server is released under the GNU General Public License, while the Freeciv-web client is released
 under the GNU Affero General Public License. See [License](LICENSE.txt) for the full license document.
 
-Freeciv-web is now playable online at http://play.freeciv.org/
+Currently known servers based on Freeciv-web:
+- [freecivweb.org](https://freecivweb.org) (Only longturn games, no 3D)
+- [moving borders](https://fcw.movingborders.es) (Everything except longturn and real-Earth)
 
 Freeciv WebGL 3D:
 ![Freeciv-web](https://raw.githubusercontent.com/freeciv/freeciv-web/develop/freeciv-web/src/main/webapp/javascript/webgl/freeciv-webgl.png "Freeciv-web WebGL screenshot")
@@ -49,10 +53,37 @@ Freeciv WebGL
 Freeciv WebGL is the 3D version, which uses the Three.js 3D engine. More info about the WebGL 3D version can be found for [developers](https://github.com/freeciv/freeciv-web/tree/develop/freeciv-web/src/main/webapp/javascript/webgl) and [3D artists](https://github.com/freeciv/freeciv-web/wiki/Contributing-Blender-models-for-Freeciv-WebGL).
 Developer: Andreas Røsdal [@andreasrosdal](http://www.twitter.com/andreasrosdal)  
 
-Running Freeciv-web with Vagrant on VirtualBox
-----------------------------------------------
+Running Freeciv-web on your computer
+------------------------------------
+The recommended and probably easiest way is to use Vagrant on VirtualBox.
+
+Whatever the method you choose, you'll have to check out Freeciv-web to a
+directory on your computer, by installing [Git](http://git-scm.com/) and
+running this command:
+ ```bash
+  git clone https://github.com/freeciv/freeciv-web.git --depth=10
+ ```
+
+You may also want to change some parameters before installing, although
+it's not needed in most cases. If you have special requirements, have a look
+at [config.dist](config/config.dist),
+copy it without the `.dist` extension and edit to your liking.
+
+#### :warning: Notice for Windows users
+
+Please keep in mind that the files are to be used in a Unix-like system
+(some Ubuntu version with the provided Vagrant file).
+Line endings for text files are different in Windows, and some editors
+"correct" them, making the files unusable in the VM.
+There's some provision to recode the main configuration files when installing,
+but not afterwards. If you touch shared files after installation, please use
+an editor that respect Unix line endings or transform them with a utility
+like dos2unix after saving them.
+
+### Running Freeciv-web with Vagrant on VirtualBox
+
 Freeciv-web can be setup using Vagrant on VirtualBox to quickly create a 
-local developer image running Freeciv-web on Ubuntu 16.04 on your host 
+local developer image running Freeciv-web on latest Ubuntu on your host
 operating system such as Windows, OSX or Linux. 
 This is the recommended way to build Freeciv-web on your computer.
 
@@ -67,19 +98,14 @@ sudo apt-get install virtualbox
 sudo apt-get install vagrant
  ```
 
-3. Install Git: http://git-scm.com/ then check out Freeciv-web from git to 
-a directory on your computer, by running this git command:
- ```bash
-  git clone https://github.com/freeciv/freeciv-web.git --depth=10
- ```
-4. Run Vagrant with the following commands in your Freeciv-web directory from step 3:
+3. Run Vagrant with the following commands in your Freeciv-web directory:
  ```bash
  vagrant up
  ```
 
   This will build, compile, install and run Freeciv-web on the virtual server image. Wait for the installation process to complete, watching for any error messages in the logs.
 
-5. Test Freeciv-web by pointing your browser to http://localhost if you run Windows or http://localhost:8080 if you run Linux or macOS. 
+4. Test Freeciv-web by pointing your browser to http://localhost if you run Windows or http://localhost:8080 if you run Linux or macOS.
 
 To log in to your Vagrant server, run the command: 
  ```bash
@@ -90,8 +116,7 @@ The Vagrant guest machine will mount the Freeciv-web source repository in the /v
 Note that running Freeciv-web using Vagrant requires about 4Gb of memory
 and 3 Gb of harddisk space.
 
-System Requirements for manual install
---------------------------------------
+### System Requirements for manual install
 
 Install this software if you are not running Freeciv-web with Vagrant:
 
@@ -129,6 +154,9 @@ Install this software if you are not running Freeciv-web with Vagrant:
 - cwebp to create .webp files of the tileset.
 
 
+When in a [tested system](scripts/install/systems),
+you may run `scripts/install/install.sh` and it will fetch and configure what's needed.
+
 Start and stop Freeciv-web with the following commands:  
   start-freeciv-web.sh  
   stop-freeciv-web.sh  
@@ -136,8 +164,7 @@ Start and stop Freeciv-web with the following commands:
 
 All software components in Freeciv-web will log to the /logs sub-directory of the Freeciv-web installation.
 
-Freeciv-Web alternative Docker image
------------------------------------------------
+### Freeciv-Web alternative Docker image
 
 1. Build local dockerfile based on debian - this will take a significant amount of time (10 - 20 minutes)
 
@@ -147,13 +174,13 @@ docker build . -t freeciv-web
 
 docker run -i -t --user docker -p 8888:8080 -p 80:80 -p 7000:7000 -p 7001:7001 -p 7002:7002 -p 6000:6000 -p 6001:6001 -p 6002:6002 freeciv-web
 
-3. Run docker runner in docker bash
+3. Start Freeciv-web with:
 
-./docker-run.sh
+./start-freeciv-web.sh
 
 Answer prompt for docker sudo password with "docker"
 
-3. Connect to docker via host machine using standard browser
+4. Connect to docker via host machine using standard browser
 
 http://localhost/
 

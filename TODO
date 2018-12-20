@@ -80,12 +80,20 @@ Unimplemented rule variation support:
   Open server/settings.c. Find topology_callback(). Remove the blocking of
   the toplogy you are working to support.
 - The ID of certain extras are hard coded.
+  - EXTRA_NONE isn't from the ruleset. There is no need to do anything about
+    it.
+  - replace the hard coded drawing code with code that draws the extra as
+    specified by the tileset Freeciv-web extracts from and by the extra
+    related packages the server sends.
+  - replace the hard coded control code. Maybe delay this part until unit
+    activities to becomes action enabler controlled?
 - The graphic tags of certain extras are hard coded.
 - Wikipedia help is only extracted for items that appear in the classic
   ruleset.
+- Freeciv-web has no client side effect evaluation.
+  - Building_Build_Cost_Pct doesn't work.
+  - Unit_Build_Cost_Pct doesn't work.
 
 Simplify Freeciv server upgrade:
 - get rid of the worst merge conflict causes
   - freeciv_web_all_packets_def_changes:
-    - find and get rid of pointless changes
-    - make more changes pointless by improving Freeciv's JSON support

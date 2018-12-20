@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # Freeciv server version upgrade notes
 # ------------------------------------
@@ -19,16 +19,45 @@
 #     Giving one of the longer removed city names to a new city still causes problems.
 # webperimental_install make "make install" install webperimental.
 # webgl_vision_cheat_temporary is a temporary solution to reveal terrain types to the WebGL client.
-# user_changeable_gameseed allows user to change map and game seed, to get reliable benchmarks of WebGL version.
 # longturn implements a very basic longturn mode for Freeciv-web.
-# multiplayer_movement_rates is http://www.hostedredmine.com/issues/654404
 # max_map_size increases MAP_MAX_SIZE.
 # load_command_confirmation adds a log message which confirms that loading is complete, so that Freeciv-web can issue additional commands.
 # pragma_pack_city_length adds pragma pack to city packet. Also sets MAX_LEN_CITYNAME 50 for large longturn games.
 # endgame-mapimg is used to generate a mapimg at endgame for hall of fame.
 # mapimg_bugfix is http://www.hostedredmine.com/issues/707912.
 
-PATCHLIST="freeciv_web_packets_def_changes city_impr_fix2 city-naming-change city_fixes2 metachange text_fixes unithand-change2 current_research_cost freeciv-svn-webclient-changes init_lists_disable goto_fcweb misc_devversion_sync tutorial_ruleset savegame maphand_ch ai_traits_crash server_password barbarian-names activity_null_check message_escape freeciv_segfauls_fix scorelog_filenames disable_global_warming win_chance navajo-remove-long-city-names webperimental_install user_changeable_gameseed multiplayer_movement_rates longturn max_map_size load_command_confirmation pragma_pack_city_length webgl_vision_cheat_temporary endgame-mapimg mapimg_bugfix "
+declare -a PATCHLIST=(
+  "freeciv_web_packets_def_changes"
+  "city_impr_fix2"
+  "city-naming-change"
+  "metachange"
+  "text_fixes"
+  "unithand-change2"
+  "freeciv-svn-webclient-changes"
+  "goto_fcweb"
+  "misc_devversion_sync"
+  "tutorial_ruleset"
+  "savegame"
+  "maphand_ch"
+  "ai_traits_crash"
+  "server_password"
+  "barbarian-names"
+  "activity_null_check"
+  "message_escape"
+  "freeciv_segfauls_fix"
+  "scorelog_filenames"
+  "disable_global_warming"
+  "win_chance"
+  "navajo-remove-long-city-names"
+  "webperimental_install"
+  "longturn"
+  "max_map_size"
+  "load_command_confirmation"
+  "pragma_pack_city_length"
+  "webgl_vision_cheat_temporary"
+  "endgame-mapimg"
+  "mapimg_bugfix"
+)
 
 apply_patch() {
   echo "*** Applying $1.patch ***"
@@ -45,7 +74,7 @@ if test "x$1" != "x" ; then
   APPLY_UNTIL="$1"
   au_found=false
 
-  for patch in $PATCHLIST
+  for patch in "${PATCHLIST[@]}"
   do
     if test "x$patch" = "x$APPLY_UNTIL" ; then
         au_found=true
@@ -73,7 +102,7 @@ sed "s/$ORIGCAPSTR/$WEBCAPSTR/" freeciv/fc_version > freeciv/fc_version.tmp
 mv freeciv/fc_version.tmp freeciv/fc_version
 chmod a+x freeciv/fc_version
 
-for patch in $PATCHLIST
+for patch in "${PATCHLIST[@]}"
 do
   if test "x${patch}.patch" = "x$APPLY_UNTIL" ; then
     echo "$patch not applied as requested to stop"

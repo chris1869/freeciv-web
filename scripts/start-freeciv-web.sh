@@ -4,28 +4,34 @@
 SCRIPT_DIR="$(dirname "$0")"
 cd "$(dirname "$0")"
 export FREECIV_WEB_DIR="${SCRIPT_DIR}/.."
-export FREECIV_DATA_PATH="${HOME}/freeciv/data/"
+export FREECIV_DATA_PATH="${HOME}/freeciv/share/freeciv/"
 export LC_ALL=en_US.UTF-8
 export LANG=en_US.UTF-8
 export LANGUAGE=en_US.UTF-8
 
 if [ ! -f ${SCRIPT_DIR}/configuration.sh ]; then
-    echo "ERROR: configuration.sh not found. copy configuration.sh.dist to configuration.sh and update it with your settings."
+    echo "ERROR: configuration.sh not found. Copy configuration.sh.dist to configuration.sh and update it with your settings."
+    exit 2
 fi
-
-${SCRIPT_DIR}/configuration.sh
-
-if [ "x$DEPENDENCY_SERVICES_START" = x ] ; then
-  DEPENDENCY_SERVICES_START="./dependency-services-default-start.sh"
-fi
+. ./configuration.sh
 
 echo "Starting up Freeciv-web: nginx, tomcat, publite2, freeciv-proxy."
 
 mkdir -p ${FREECIV_WEB_DIR}/logs
+sudo ln -f /etc/nginx/sites-available/freeciv-web /etc/nginx/sites-enabled/freeciv-web
 
 # Start Freeciv-web's dependency services according to the users
 # configuration.
-$DEPENDENCY_SERVICES_START
+./dependency-services-start.sh
+if [ "${TOMCATMANAGER}" = "Y" ]; then
+    if [ -z "${TOMCATMANAGER_PASSWORD}" ]; then
+        echo "Please enter tomcat-manager password for ${TOMCATMANAGER_USER}"
+        read TOMCATMANAGER_PASSWORD
+    fi
+    curl -LsSg -K - << EOF
+url="http://${TOMCATMANAGER_USER}:${TOMCATMANAGER_PASSWORD}@localhost:8080/manager/text/start?path=/freeciv-web"
+EOF
+fi
 
 #3. publite2
 echo "Starting publite2" && \
@@ -43,4 +49,6 @@ cd ${FREECIV_WEB_DIR}/freeciv-earth/ && nohup python3 -u freeciv-earth-mapgen.py
 
 echo "Will sleep for 8 seconds, then do a status test..." && \
 sleep 8 && \
-sh ${FREECIV_WEB_DIR}/scripts/status-freeciv-web.sh
+bash ${FREECIV_WEB_DIR}/scripts/status-freeciv-web.sh
+
+sleep infinity

@@ -5,8 +5,8 @@
 # Freeciv-web Vagrant Vagrantfile - play.freeciv.org
 # 2014-02-17 - Andreas Røsdal
 #
-# Run 'vagrant up' in this directory, which will create a VirtualBox image,
-# and run scripts/freeciv-web-bootstrap.sh to install Freeciv-web for you.
+# Run 'vagrant up' in this directory, which will create a VirtualBox image
+# and install Freeciv-web for you.
 # Then point your browser to http://localhost/ on your host OS.
 #
 
@@ -26,10 +26,11 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   config.vm.box_url = "https://cloud-images.ubuntu.com/bionic/current/bionic-server-cloudimg-amd64-vagrant.box"
 
   if Vagrant::Util::Platform.windows?
-    config.vm.network :forwarded_port, guest: 80, host: 80, host_ip: "localhost"
-    config.vm.network :forwarded_port, guest: 443, host: 443, host_ip: "localhost"
+	  config.vm.network :forwarded_port, guest: 80, host: 80, host_ip: "127.0.0.1"
+	  config.vm.network :forwarded_port, guest: 443, host: 443, host_ip: "127.0.0.1"
   else 
-    config.vm.network :forwarded_port, guest: 80, host: 8080, host_ip: "localhost"
+	  config.vm.network :forwarded_port, guest: 80, host: 8080, host_ip: "127.0.0.1"
+	  config.vm.network :forwarded_port, guest: 443, host: 8443, host_ip: "127.0.0.1"
   end
 
   config.vm.provider "virtualbox" do |v|
@@ -50,12 +51,20 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
 
     mem = mem / 1024 / 2
     v.customize ["modifyvm", :id, "--memory", mem]
+
+    # Disable serial port. It is unnecessary, and may cause error on Win10
+    #   https://github.com/joelhandwell/ubuntu_vagrant_boxes/issues/1#issuecomment-292370353
+    v.customize ["modifyvm", :id, "--uartmode1", "disconnected"]
   end
 
   config.vm.synced_folder "./", "/vagrant"
 
-  # run the Freeciv bootstrap script on startup
-  config.vm.provision :shell, :path => "scripts/vagrant-build.sh", run: "always"
-
+  # There are problems with the default configuration of a DNS stub in some
+  # versions of systemd-resolved
+  config.vm.provision "systemd-resolved workaround", type: "shell", inline: "ln -sf /run/systemd/resolve/resolv.conf /etc/resolv.conf"
+  # run the Freeciv bootstrap script on machine creation
+  config.vm.provision "bootstrap", type: "shell", inline: "/vagrant/scripts/install/install.sh --mode=TEST", privileged: false
+  # run the Freeciv start script on startup
+  config.vm.provision "startup", type: "shell", inline: "/vagrant/scripts/start-freeciv-web.sh", run: "always", privileged: false
 
 end
