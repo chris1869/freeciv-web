@@ -1,4 +1,4 @@
-config
+#config
 *.new
 *.bck
 *.gen
